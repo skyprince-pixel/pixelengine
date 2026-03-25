@@ -25,6 +25,8 @@ class Rect(PObject):
     def render(self, canvas):
         if not self.visible:
             return
+        if self.width <= 0 or self.height <= 0:
+            return
         color = self.get_render_color()
         img = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)

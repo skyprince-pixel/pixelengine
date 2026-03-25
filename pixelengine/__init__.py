@@ -57,6 +57,17 @@ from pixelengine.background import (
     ParallaxLayer,
 )
 
+# ── Effects ─────────────────────────────────────────────────
+from pixelengine.effects import (
+    ParticleEmitter,
+    FadeTransition,
+    WipeTransition,
+    Trail,
+)
+
+# ── TileMap ─────────────────────────────────────────────────
+from pixelengine.tilemap import TileSet, TileMap
+
 # ── Scene ───────────────────────────────────────────────────
 from pixelengine.scene import Scene
 
@@ -81,6 +92,10 @@ __all__ = [
     "Camera", "CameraPan", "CameraZoom", "CameraCenterOn",
     # Background
     "Background", "GradientBackground", "Starfield", "ParallaxLayer",
+    # Effects
+    "ParticleEmitter", "FadeTransition", "WipeTransition", "Trail",
+    # TileMap
+    "TileSet", "TileMap",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
 ]
