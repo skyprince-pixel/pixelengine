@@ -408,7 +408,13 @@ class SoundTimeline:
                 continue
             end_idx = min(end_idx, total_samples)
             src_len = end_idx - start_idx
-            mix_buf[start_idx:end_idx] += sfx.samples[:src_len]
+            
+            # Lower default SFX volume by 50%, keep voiceovers normal
+            sfx_samples = sfx.samples
+            if not sfx.name.startswith("voiceover_"):
+                sfx_samples = sfx.samples * 0.5
+                
+            mix_buf[start_idx:end_idx] += sfx_samples[:src_len]
 
         # Clamp
         peak = np.max(np.abs(mix_buf))
