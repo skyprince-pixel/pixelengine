@@ -62,7 +62,12 @@ from pixelengine.effects import (
     ParticleEmitter,
     FadeTransition,
     WipeTransition,
+    IrisTransition,
+    DissolveTransition,
     Trail,
+    ScreenFlash,
+    Outline,
+    Grid,
 )
 
 # ── TileMap ─────────────────────────────────────────────────
@@ -93,7 +98,9 @@ __all__ = [
     # Background
     "Background", "GradientBackground", "Starfield", "ParallaxLayer",
     # Effects
-    "ParticleEmitter", "FadeTransition", "WipeTransition", "Trail",
+    "ParticleEmitter",
+    "FadeTransition", "WipeTransition", "IrisTransition", "DissolveTransition",
+    "Trail", "ScreenFlash", "Outline", "Grid",
     # TileMap
     "TileSet", "TileMap",
     # Color
