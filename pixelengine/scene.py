@@ -1,8 +1,11 @@
-"""PixelEngine Scene — the core orchestrator for animations."""
+"""PixelEngine Scene — the core orchestrator for animations and sound."""
+import os
+import tempfile
 from pixelengine.config import PixelConfig, DEFAULT_CONFIG
 from pixelengine.canvas import Canvas
 from pixelengine.camera import Camera
 from pixelengine.renderer import Renderer
+from pixelengine.sound import SoundFX, SoundTimeline, mux_audio_video
 
 
 class Scene:
@@ -14,9 +17,14 @@ class Scene:
             def construct(self):
                 rect = Rect(20, 10, color="#FF004D")
                 self.add(rect)
+                self.play_sound(SoundFX.coin())
                 self.wait(2.0)
 
         MyScene().render("output.mp4")
+
+    Auto-sound (enabled by default)::
+
+        scene.auto_sound = True  # TypeWriter → typing clicks, etc.
     """
 
     def __init__(self, config: PixelConfig = None):
@@ -27,17 +35,18 @@ class Scene:
             self.config.background_color,
         )
         self.camera = Camera(self.config.canvas_width, self.config.canvas_height)
-        self._objects: list = []      # PObjects currently in the scene
-        self._frames: list = []       # Captured PIL Image frames
+        self._objects: list = []
+        self._frames: list = []
+
+        # Sound
+        self._sound_timeline = SoundTimeline()
+        self._current_time: float = 0  # Tracks elapsed time during construct()
+        self.auto_sound: bool = True   # Enable auto-generated sounds
 
     # ── User overrides ──────────────────────────────────────
 
     def construct(self):
-        """Override this method to define your scene.
-
-        Use ``self.add()``, ``self.play()``, and ``self.wait()``
-        to compose your animation.
-        """
+        """Override this method to define your scene."""
         raise NotImplementedError(
             "Subclass Scene and implement construct()"
         )
@@ -58,61 +67,110 @@ class Scene:
                 self._objects.remove(obj)
         return self
 
+    # ── Sound ───────────────────────────────────────────────
+
+    def play_sound(self, sfx: SoundFX, at: float = None):
+        """Place a sound effect at a specific time.
+
+        Args:
+            sfx: A SoundFX instance (e.g. SoundFX.coin()).
+            at: Time in seconds. If None, uses current scene time.
+        """
+        time = at if at is not None else self._current_time
+        self._sound_timeline.add(sfx, time)
+
     # ── Timing ──────────────────────────────────────────────
 
     def wait(self, seconds: float = 1.0):
-        """Hold the current frame for the given duration.
-
-        Args:
-            seconds: Duration to hold (converted to frames at config.fps).
-        """
+        """Hold the current frame for the given duration."""
         num_frames = max(1, int(seconds * self.config.fps))
         for _ in range(num_frames):
             self._capture_frame()
 
-    def play(self, *animations, duration: float = 1.0):
+    def play(self, *animations, duration: float = 1.0, sound: SoundFX = None):
         """Play one or more animations over the given duration.
-
-        Each animation's ``interpolate(alpha)`` is called with alpha
-        going from 0.0 to 1.0 over the duration.
 
         Args:
             *animations: Animation objects to play.
             duration: How long the animation runs (seconds).
+            sound: Optional SoundFX to play at the start of this animation.
         """
+        # Place explicit sound
+        if sound is not None:
+            self.play_sound(sound)
+
+        # Auto-sound detection
+        if self.auto_sound:
+            self._auto_sound_for_animations(animations)
+
         num_frames = max(1, int(duration * self.config.fps))
         for frame_idx in range(num_frames):
             alpha = frame_idx / max(1, num_frames - 1)
             for anim in animations:
                 if hasattr(anim, "interpolate"):
                     anim.interpolate(alpha)
+
+                    # TypeWriter auto-sound: click on each new character
+                    if self.auto_sound and hasattr(anim, 'target') and \
+                       hasattr(anim, 'total_chars'):
+                        self._auto_typewriter_sound(anim, alpha, frame_idx)
+
             self._capture_frame()
+
+    def _auto_sound_for_animations(self, animations):
+        """Add auto-sounds based on animation types."""
+        for anim in animations:
+            anim_type = type(anim).__name__
+
+            if anim_type == "FadeIn":
+                self.play_sound(SoundFX.reveal())
+            elif anim_type == "FadeOut":
+                self.play_sound(SoundFX.dismiss())
+            elif anim_type == "FadeTransition":
+                self.play_sound(SoundFX.whoosh())
+            elif anim_type == "WipeTransition":
+                self.play_sound(SoundFX.whoosh())
+            elif anim_type == "IrisTransition":
+                self.play_sound(SoundFX.whoosh())
+
+    _last_tw_char_count = {}
+
+    def _auto_typewriter_sound(self, anim, alpha, frame_idx):
+        """Generate typing clicks for TypeWriter animation."""
+        anim_id = id(anim)
+        current_chars = getattr(anim.target, 'max_chars', 0) or 0
+
+        prev = self._last_tw_char_count.get(anim_id, 0)
+        if current_chars > prev:
+            # New character appeared — add a typing click
+            char = anim.target.text[current_chars - 1] if current_chars <= len(anim.target.text) else ' '
+            if char == '\n':
+                self.play_sound(SoundFX.typing_return())
+            else:
+                self.play_sound(SoundFX.typing_key())
+        self._last_tw_char_count[anim_id] = current_chars
 
     # ── Internal rendering ──────────────────────────────────
 
     def _capture_frame(self):
         """Render all objects (with camera transform) and capture the frame."""
         dt = 1.0 / self.config.fps
+        self._current_time += dt
         self.camera.update(dt)
         self.canvas.clear()
 
-        # Z-sort: lower z_index drawn first (behind)
         sorted_objects = sorted(self._objects, key=lambda o: o.z_index)
 
         for obj in sorted_objects:
             if not obj.visible:
                 continue
 
-            # Apply camera transform: shift object's render position
             if self.camera.x != 0 or self.camera.y != 0 or self.camera.zoom != 1.0 or \
                self.camera._shake_offset_x != 0 or self.camera._shake_offset_y != 0:
-                # Save original position
                 orig_x, orig_y = obj.x, obj.y
-                # Convert world pos to screen pos
                 screen_x, screen_y = self.camera.world_to_screen(obj.x, obj.y)
                 obj.x, obj.y = screen_x, screen_y
                 obj.render(self.canvas)
-                # Restore original position
                 obj.x, obj.y = orig_x, orig_y
             else:
                 obj.render(self.canvas)
@@ -123,10 +181,11 @@ class Scene:
     # ── Video output ────────────────────────────────────────
 
     def render(self, output_path: str = "output.mp4"):
-        """Build the scene and encode to video.
+        """Build the scene and encode to video with audio.
 
-        Calls ``construct()`` to generate frames, then encodes
-        all frames to MP4 via ffmpeg.
+        Calls ``construct()`` to generate frames and sound events,
+        then encodes video via ffmpeg, mixes in audio, and produces
+        the final MP4.
 
         Args:
             output_path: Path for the output video file.
@@ -138,17 +197,37 @@ class Scene:
             f"({self.config.upscale}× upscale)"
         )
         print(f"  FPS: {self.config.fps}")
+        print(f"  Auto-sound: {'on' if self.auto_sound else 'off'}")
 
         self._frames = []
+        self._current_time = 0
+        self._sound_timeline = SoundTimeline()
+        Scene._last_tw_char_count = {}
         self.construct()
 
         total_seconds = len(self._frames) / self.config.fps
+        sound_count = self._sound_timeline.event_count
         print(f"[PixelEngine] Captured {len(self._frames)} frames ({total_seconds:.1f}s)")
+        print(f"  Sound events: {sound_count}")
 
         if not self._frames:
             print("[PixelEngine] Warning: No frames captured!")
             return
 
         renderer = Renderer(self.config)
-        renderer.encode(self._frames, output_path)
+
+        if sound_count > 0:
+            # Render video to temp file, then mux with audio
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmp_video = os.path.join(tmpdir, "video_only.mp4")
+                tmp_audio = os.path.join(tmpdir, "audio.wav")
+
+                renderer.encode(self._frames, tmp_video)
+                self._sound_timeline.save_wav(tmp_audio, total_seconds)
+                mux_audio_video(tmp_video, tmp_audio, output_path)
+                size = os.path.getsize(output_path) / 1024
+                print(f"  Output: {output_path} ({size:.1f} KB) [video+audio]")
+        else:
+            renderer.encode(self._frames, output_path)
+
         print(f"[PixelEngine] ✓ Video saved to: {output_path}")

@@ -73,6 +73,9 @@ from pixelengine.effects import (
 # ── TileMap ─────────────────────────────────────────────────
 from pixelengine.tilemap import TileSet, TileMap
 
+# ── Sound ───────────────────────────────────────────────────
+from pixelengine.sound import SoundFX, SoundTimeline
+
 # ── Scene ───────────────────────────────────────────────────
 from pixelengine.scene import Scene
 
@@ -103,6 +106,8 @@ __all__ = [
     "Trail", "ScreenFlash", "Outline", "Grid",
     # TileMap
     "TileSet", "TileMap",
+    # Sound
+    "SoundFX", "SoundTimeline",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
 ]
