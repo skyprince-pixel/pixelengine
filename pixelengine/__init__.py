@@ -47,7 +47,15 @@ from pixelengine.text import PixelText, TypeWriter
 from pixelengine.sprite import Sprite
 
 # ── Camera ──────────────────────────────────────────────────
-from pixelengine.camera import Camera, CameraPan, CameraZoom
+from pixelengine.camera import Camera, CameraPan, CameraZoom, CameraCenterOn
+
+# ── Background ──────────────────────────────────────────────
+from pixelengine.background import (
+    Background,
+    GradientBackground,
+    Starfield,
+    ParallaxLayer,
+)
 
 # ── Scene ───────────────────────────────────────────────────
 from pixelengine.scene import Scene
@@ -70,7 +78,9 @@ __all__ = [
     # Sprite
     "Sprite",
     # Camera
-    "Camera", "CameraPan", "CameraZoom",
+    "Camera", "CameraPan", "CameraZoom", "CameraCenterOn",
+    # Background
+    "Background", "GradientBackground", "Starfield", "ParallaxLayer",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
 ]
