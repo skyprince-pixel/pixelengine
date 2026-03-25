@@ -75,6 +75,7 @@ from pixelengine.tilemap import TileSet, TileMap
 
 # ── Sound ───────────────────────────────────────────────────
 from pixelengine.sound import SoundFX, SoundTimeline
+from pixelengine.voiceover import VoiceOver
 
 # ── Scene ───────────────────────────────────────────────────
 from pixelengine.scene import Scene
@@ -107,7 +108,7 @@ __all__ = [
     # TileMap
     "TileSet", "TileMap",
     # Sound
-    "SoundFX", "SoundTimeline",
+    "SoundFX", "SoundTimeline", "VoiceOver",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
 ]

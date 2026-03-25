@@ -79,6 +79,21 @@ class Scene:
         time = at if at is not None else self._current_time
         self._sound_timeline.add(sfx, time)
 
+    def play_voiceover(self, text: str, voice: str = "af_bella", speed: float = 1.0):
+        """Generate and play a Kokoro AI voiceover, holding the frame
+        for the duration of the speech.
+
+        Args:
+            text: Text for the voiceover to speak.
+            voice: Voice ID (default 'af_bella').
+            speed: Speed multiplier (default 1.0).
+        """
+        from pixelengine.voiceover import VoiceOver
+        sfx, duration = VoiceOver.generate(text, voice=voice, speed=speed)
+        self.play_sound(sfx)
+        print(f"[PixelEngine] VoiceOver: '{text[:30]}...' ({duration:.2f}s)")
+        self.wait(duration)
+
     # ── Timing ──────────────────────────────────────────────
 
     def wait(self, seconds: float = 1.0):
