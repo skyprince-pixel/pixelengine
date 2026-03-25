@@ -1,6 +1,7 @@
 """PixelEngine Scene — the core orchestrator for animations."""
 from pixelengine.config import PixelConfig, DEFAULT_CONFIG
 from pixelengine.canvas import Canvas
+from pixelengine.camera import Camera
 from pixelengine.renderer import Renderer
 
 
@@ -25,6 +26,7 @@ class Scene:
             self.config.canvas_height,
             self.config.background_color,
         )
+        self.camera = Camera(self.config.canvas_width, self.config.canvas_height)
         self._objects: list = []      # PObjects currently in the scene
         self._frames: list = []       # Captured PIL Image frames
 
@@ -89,13 +91,32 @@ class Scene:
     # ── Internal rendering ──────────────────────────────────
 
     def _capture_frame(self):
-        """Render all objects and capture the frame."""
+        """Render all objects (with camera transform) and capture the frame."""
+        dt = 1.0 / self.config.fps
+        self.camera.update(dt)
         self.canvas.clear()
+
         # Z-sort: lower z_index drawn first (behind)
         sorted_objects = sorted(self._objects, key=lambda o: o.z_index)
+
         for obj in sorted_objects:
-            if obj.visible:
+            if not obj.visible:
+                continue
+
+            # Apply camera transform: shift object's render position
+            if self.camera.x != 0 or self.camera.y != 0 or self.camera.zoom != 1.0 or \
+               self.camera._shake_offset_x != 0 or self.camera._shake_offset_y != 0:
+                # Save original position
+                orig_x, orig_y = obj.x, obj.y
+                # Convert world pos to screen pos
+                screen_x, screen_y = self.camera.world_to_screen(obj.x, obj.y)
+                obj.x, obj.y = screen_x, screen_y
                 obj.render(self.canvas)
+                # Restore original position
+                obj.x, obj.y = orig_x, orig_y
+            else:
+                obj.render(self.canvas)
+
         frame = self.canvas.get_frame(self.config.upscale)
         self._frames.append(frame)
 

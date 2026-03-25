@@ -43,14 +43,18 @@ from pixelengine.animation import (
 # ── Text ────────────────────────────────────────────────────
 from pixelengine.text import PixelText, TypeWriter
 
+# ── Sprite ──────────────────────────────────────────────────
+from pixelengine.sprite import Sprite
+
+# ── Camera ──────────────────────────────────────────────────
+from pixelengine.camera import Camera, CameraPan, CameraZoom
+
 # ── Scene ───────────────────────────────────────────────────
 from pixelengine.scene import Scene
 
 __all__ = [
     # Core
-    "PixelConfig",
-    "Scene",
-    "PObject",
+    "PixelConfig", "Scene", "PObject",
     # Shapes
     "Rect", "Circle", "Line", "Triangle", "Polygon",
     # Animation
@@ -63,6 +67,10 @@ __all__ = [
     "bounce", "elastic",
     # Text
     "PixelText", "TypeWriter",
+    # Sprite
+    "Sprite",
+    # Camera
+    "Camera", "CameraPan", "CameraZoom",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
 ]
