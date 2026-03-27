@@ -1,6 +1,6 @@
-# PixelEngine
+# PixelEngine v0.3.0
 
-**PixelEngine** is a specialized, code-first Python framework for generating educational, animated, 8-bit style pixel art videos. It is inspired by tools like Manim but acts exclusively in low-resolution coordinate space (e.g., 256×144), using purely nearest-neighbor upscale routing to keep a crisp, retro aesthetic.
+**PixelEngine** is a specialized, code-first Python framework for generating educational, animated pixel art videos. It renders at a configurable canvas resolution (default **480×270**) and upscales with nearest-neighbor to **1920×1080** (Full HD) for crisp pixel edges.
 
 All rendering is done via **Pillow** images encoded straight into **ffmpeg** with programmatic logic and math. No external graphic files or audio files are required by default.
 
@@ -10,7 +10,7 @@ All rendering is done via **Pillow** images encoded straight into **ffmpeg** wit
 
 1. **Python**: 3.8+ (Virtual Environment **highly** recommended)
 2. **Core Dependencies**: `Pillow`, `numpy`
-3. **Audio Dependencies**: `soundfile`, `chatterbox-tts`, `torch`, `torchaudio` (for Voiceover TTS)
+3. **Audio Dependencies**: `soundfile`, `kokoro-onnx` (default TTS), `chatterbox-tts`, `torch`, `torchaudio` (optional high-quality TTS)
 4. **System Dep**: `ffmpeg` (must be accessible in PATH to mux final MP4s).
 
 ---
@@ -25,11 +25,11 @@ from pixelengine import Scene, PixelConfig, Rect, PixelText, TypeWriter
 class MyAnimation(Scene):
     def construct(self):
         # 1. Place static object
-        bg = Rect(width=256, height=144, color="#1D2B53")
+        bg = Rect(width=480, height=270, color="#1D2B53")
         self.add(bg)
 
         # 2. Add some text
-        text = PixelText("HELLO GALAXY", x=128, y=72, align="center")
+        text = PixelText("HELLO GALAXY", x=240, y=135, align="center")
         self.add(text)
 
         # 3. Animate TypeWriter taking exactly 2.0 seconds
@@ -41,9 +41,22 @@ if __name__ == "__main__":
     MyAnimation(PixelConfig.landscape()).render("output.mp4")
 ```
 
-- **Config**: The default canvas is precisely **256×144** upscale rendering 4x to 1024x576 at `12 FPS`. Every coordinate and element should be treated logically in `256x144` screen-space.
-- **Coordinates**: `(0,0)` is top-left.
+- **Config**: Default canvas is **480×270** upscaled 4x to **1920×1080** at **24 FPS**.
+- **Coordinates**: `(0,0)` is top-left. All coordinates are in canvas-space.
 - **Z-Index**: Control layering with `.z_index`. Lower draws behind higher.
+
+### Resolution Presets
+
+| Preset | Canvas | Output | Use Case |
+|--------|--------|--------|----------|
+| `PixelConfig()` | 480×270 | 1920×1080 | Default (Full HD) |
+| `PixelConfig.landscape()` | 480×270 | 1920×1080 | YouTube landscape |
+| `PixelConfig.portrait()` | 270×480 | 1080×1920 | YouTube Shorts |
+| `PixelConfig.retro()` | 256×144 | 1024×576 | Classic 8-bit style |
+| `PixelConfig.square()` | 384×384 | 1536×1536 | Square format |
+| `PixelConfig.hd()` | 320×180 | 1280×720 | HD 720p |
+| `PixelConfig.full_hd()` | 480×270 | 1920×1080 | Full HD 1080p |
+| `PixelConfig.qhd()` | 640×360 | 2560×1440 | QHD 2K |
 
 ---
 
@@ -55,6 +68,22 @@ Primitives cover standard geometry.
 - `Triangle(x1, y1, x2, y2, x3, y3, color)`
 
 *Note*: Colors can be passed as standard `"HEX"` strings. `pixelengine.color` has built-in palettes (`PICO8`, `GAMEBOY`, `NES`).
+
+### Per-Object Quality Control (v3)
+Every object has a `render_quality` property that controls its individual pixel resolution:
+```python
+obj.render_quality = 0.3   # Extra chunky/pixelated (retro style)
+obj.render_quality = 1.0   # Normal (default)
+obj.render_quality = 2.0   # Smooth, anti-aliased look
+```
+
+### Lighting Properties (v3)
+Every object has lighting interaction properties:
+```python
+obj.casts_shadow = True        # Object casts shadows from lights
+obj.receives_light = True      # Lighting affects this object
+obj.shadow_opacity = 0.4       # Shadow darkness (0.0–1.0)
+```
 
 ---
 
@@ -133,7 +162,7 @@ scene.play(tracker.animate_to(100), duration=2.0)
 ---
 
 ## 4. Sprites
-The `Sprite` system runs off an ASCII matrix array, letting you define 8-bit characters dynamically without `.png` files!
+The `Sprite` system runs off an ASCII matrix array, letting you define pixel characters dynamically without `.png` files!
 
 ```python
 player = Sprite.from_art([
@@ -152,11 +181,18 @@ player = Sprite.from_art([
 ---
 
 ## 5. Camera Control
-The `self.camera` moves the 256x144 viewport mapping over a virtual world.
+The `self.camera` moves the viewport over a virtual world.
 - **Transform**: `self.camera.x` / `self.camera.y` / `self.camera.zoom`.
 - **Following**: `self.camera.follow(player, deadzone=10)`
 - **Shake**: `self.camera.shake(intensity=5, duration=0.4)`
 - **Animation**: `CameraPan()`, `CameraZoom()`, `CameraCenterOn()`.
+
+### Camera Focus (v3)
+Set a focus point for depth-of-field effect:
+```python
+self.camera.set_focus(x=240, y=135, radius=30)  # Focus on center
+self.camera.clear_focus()                         # Remove focus
+```
 
 ---
 
@@ -189,7 +225,83 @@ All visual effects are procedurally coded! Add them to `self.add()`.
 
 ---
 
-## 8. Procedural Audio & TTS!
+## 8. Lighting & Shadows (v3)
+
+Dynamic lighting with shadow casting.
+
+### Light Types
+```python
+from pixelengine import AmbientLight, PointLight, DirectionalLight
+
+# Global base illumination
+ambient = AmbientLight(intensity=0.2, color="#FFFFFF")
+scene.add_light(ambient)
+
+# Radial light source (inherits PObject — can be animated with MoveTo!)
+torch = PointLight(x=240, y=135, radius=80, color="#FFA300",
+                   intensity=1.2, falloff="quadratic")
+torch.visible = True  # Show light source marker
+scene.add_light(torch)
+scene.play(MoveTo(torch, 100, 50), duration=2.0)  # Animate the light!
+
+# Parallel rays (sun/moon simulation)
+sun = DirectionalLight(angle=225, intensity=0.6, color="#FFEC27")
+scene.add_light(sun)
+```
+
+### Shadow Casting
+Objects with `casts_shadow = True` project shadow polygons away from lights:
+```python
+pillar = Rect(15, 50, x=80, y=60, color="#5F574F")
+pillar.casts_shadow = True
+pillar.shadow_opacity = 0.6  # How dark the shadows are
+scene.add(pillar)
+```
+
+### How It Works
+1. **Shadow pass**: Compute shadow polygons from each object's silhouette
+2. **Light map pass**: Accumulate light contributions (ambient + point + directional)
+3. **Composite pass**: Multiply-blend the light map over the canvas
+
+---
+
+## 9. Camera Post-Processing Effects (v3)
+
+Apply cinematic post-processing effects to the camera output.
+
+```python
+from pixelengine import Vignette, ChromaticAberration, Letterbox, FilmGrain, DepthOfField
+
+# Vignette — radial edge darkening
+scene.add_camera_fx(Vignette(intensity=0.5, radius=0.6))
+
+# Chromatic Aberration — RGB channel offset
+scene.add_camera_fx(ChromaticAberration(offset=2))
+
+# Letterbox — cinematic black bars
+scene.add_camera_fx(Letterbox(bar_height=20))
+
+# Film Grain — random noise overlay
+scene.add_camera_fx(FilmGrain(intensity=0.08))
+
+# Depth of Field — auto-syncs with camera.set_focus()
+scene.camera.set_focus(x=240, y=135, radius=30)
+
+# Remove effects
+scene.remove_camera_fx(vignette)
+```
+
+Effects are applied in order after upscaling, creating a professional post-processing pipeline.
+
+---
+
+## 10. Procedural Audio & TTS
+
+### Audio Quality
+- **Sample Rate**: 48kHz (CD-quality)
+- **Bit Depth**: 24-bit PCM
+- **AAC Bitrate**: 256kbps
+
 Sounds require NO actual MP3/WAV uploads. They are procedurally sine/square/triangle generated in numpy, natively remuxed in ffmpeg at compile time!
 
 ### Auto Sounds
@@ -202,23 +314,41 @@ self.play_sound(SoundFX.coin())
 self.play_sound(SoundFX.explosion())
 ```
 
-### VoiceOver (Chatterbox Turbo TTS)
+### VoiceOver (Kokoro ONNX — default)
 ```python
-# Default voice (no reference clip needed)
-self.play_voiceover(
-    "Hello! I'm your AI teacher. Here is math trick number one."
-)
+# Default voice (Kokoro — fast, lightweight)
+self.play_voiceover("Hello! I'm your AI teacher.")
 
-# With voice cloning (provide a ~10s reference .wav)
+# Specify Kokoro voice
+self.play_voiceover("With a specific voice.", voice="af_bella")
+```
+
+### VoiceOver (Chatterbox Turbo — high-quality)
+```python
+# Voice cloning with reference audio
 self.play_voiceover(
     "Hello! [chuckle] Let me show you something amazing.",
-    voice="path/to/reference_clip.wav"
+    voice="path/to/reference_clip.wav",
+    engine="chatterbox"
 )
+```
+
+### Batch Preload (Recommended)
+```python
+from pixelengine import VoiceOver
+VoiceOver.preload(["Line one.", "Line two.", "Line three."])
+```
+
+### Animation During Speech
+```python
+from pixelengine.voiceover import VoiceOver
+sfx, dur = VoiceOver.generate("Look at me move!", engine="kokoro")
+self.play(MoveTo(character, x=200), duration=dur, sound=sfx)
 ```
 
 ---
 
-## 9. Texture System (v2)
+## 11. Texture System (v2)
 Fill shapes with pixel-art-friendly patterns instead of flat colors.
 
 **Built-in patterns**: `checkerboard`, `stripes_h`, `stripes_v`, `diagonal`, `dots`, `crosshatch`, `brick`, `herringbone`.
@@ -240,7 +370,7 @@ scene.add(rect)
 
 ---
 
-## 10. Pseudo-3D Rendering (v2)
+## 12. Pseudo-3D Rendering (v2)
 Wireframe 3D shapes projected onto the 2D pixel canvas. Perfect for geometry education.
 
 ```python
@@ -260,14 +390,14 @@ scene.play(Rotate3D(cube, axis="y", degrees=360), duration=3.0)
 
 ---
 
-## 11. Simulation Engine (v2)
+## 13. Simulation Engine (v2)
 Physics simulations rendered as video — gravity, collisions, pendulums, springs, orbits.
 
 ### Self-contained Simulations
 ```python
 from pixelengine import Pendulum, Spring, Rope, OrbitalSystem, FluidParticles
 
-pend = Pendulum(pivot_x=128, pivot_y=30, length=60, angle=45, color="#FF004D")
+pend = Pendulum(pivot_x=240, pivot_y=50, length=80, angle=45, color="#FF004D")
 scene.add(pend)
 scene.wait(5)  # Physics auto-advances during render
 ```
@@ -277,10 +407,10 @@ scene.wait(5)  # Physics auto-advances during render
 from pixelengine import PhysicsWorld, PhysicsBody, Circle
 
 physics = PhysicsWorld(gravity_y=100)
-physics.bounds = (0, 0, 256, 144)
+physics.bounds = (0, 0, 480, 270)
 scene.physics = physics  # Auto-stepped each frame
 
-ball = Circle(5, x=128, y=20, color="#FF004D")
+ball = Circle(5, x=240, y=20, color="#FF004D")
 body = PhysicsBody(ball, mass=1.0, restitution=0.8)
 physics.add_body(body)
 scene.add(ball)
@@ -292,20 +422,19 @@ scene.wait(5)
 
 ---
 
-## 12. Outputs & File Organization
+## 14. Outputs & File Organization
 
-By default, PixelEngine now automatically organizes generated scripts, audio, and videos into an `outputs/` folder. It uses the name of the python script you run as the project name.
+By default, PixelEngine now automatically organizes generated scripts, audio, and videos into an `outputs/` folder.
 
-For example, if you run a script named `my_video.py`, PixelEngine will generate:
 ```
 outputs/
 └── my_video/
-    ├── 1024x576_12fps/
+    ├── 1920x1080_24fps/
     │   └── MyScene.mp4     # The final rendered video
     ├── audio/
     │   └── MyScene.wav     # The isolated audio track
     └── scripts/
-        └── my_video.py     # A backup copy of the script state for reference
+        └── my_video.py     # A backup copy of the script
 ```
 
 To use this feature, simply call `scene.render()` with no arguments.
@@ -315,7 +444,6 @@ if __name__ == "__main__":
     scene = MyScene(PixelConfig.landscape())
     scene.render()  # Auto-organizes to outputs/my_video/
 ```
-*(If you pass an explicit path like `scene.render("video.mp4")`, it will bypass organization and output directly to that path).*
 
 ---
 <br>
@@ -323,8 +451,8 @@ if __name__ == "__main__":
 # 🤖 Special Guide for AI Agents
 **If an AI Agent is tasked with using `PixelEngine` to code a video, STRICTLY REMEMBER:**
 
-1. **Resolution Scale**: Keep sizes strictly micro-dimensioned (e.g., maximum `x=256` maximum `y=144`). Do not tell `Rect` to draw at width `1920`. It is 4x scaled via `.config` at compilation.
-2. **Audio Volume Bug / Sync Rules**: Do not mess with `sleep` or real-world `time.time()`. Only use `self.wait(2.0)`. The renderer executes synchronously offline at `12 FPS`.
+1. **Resolution Scale**: Default canvas is **480×270** (landscape) or **270×480** (portrait). For retro style use `PixelConfig.retro()` (256×144). Do NOT make shapes at output resolution (1920×1080).
+2. **Audio Volume Bug / Sync Rules**: Do not mess with `sleep` or real-world `time.time()`. Only use `self.wait(2.0)`. The renderer executes synchronously offline at `24 FPS`.
 3. **Typography**: The font maps to a `5x7` character limitation array inside `text.py`. It is purely uppercase logic.
 4. **Imports**: Import ONLY from the engine facade `pixelengine` root:
    ```python
@@ -341,10 +469,14 @@ if __name__ == "__main__":
        Cube3D, Sphere3D, Vec3,
        # v2 Simulations
        Pendulum, Spring, Rope, PhysicsWorld, PhysicsBody,
+       # v3 Lighting
+       AmbientLight, PointLight, DirectionalLight,
+       # v3 Camera Effects
+       Vignette, ChromaticAberration, Letterbox, FilmGrain, DepthOfField,
    )
    ```
 5. **No File dependencies**: Do **not** try to load `.png`, `.wav`, or `.json`. Use procedural generation.
-6. **VoiceOver** is blocking. Uses Chatterbox Turbo TTS (auto-detects MPS/CPU). For simultaneous animation + speech, generate manually:
+6. **VoiceOver** is blocking. Default engine is **Kokoro ONNX** (fast). For simultaneous animation + speech, generate manually:
    ```python
    from pixelengine.voiceover import VoiceOver
    speech_sfx, speech_dur = VoiceOver.generate("Look at me move!")
@@ -354,3 +486,6 @@ if __name__ == "__main__":
 7. **Textures**: Set `shape.fill_texture = PatternTexture(...)` before adding to scene.
 8. **3D Objects**: Position in 3D via `obj.position = Vec3(x, y, z)` and set `obj.rotation_x/y/z` for rotation. Use `Rotate3D` animation for smooth rotation.
 9. **Simulations**: Self-contained objects like `Pendulum` and `Rope` auto-advance physics during `self.wait()`. For custom physics, create a `PhysicsWorld` and assign to `scene.physics`.
+10. **Lighting (v3)**: Use `scene.add_light()` / `scene.remove_light()`. PointLights are PObjects and can be animated with `MoveTo`. Set `obj.casts_shadow = True` for shadow casting.
+11. **Camera Effects (v3)**: Use `scene.add_camera_fx()` / `scene.remove_camera_fx()`. Effects are applied post-upscale. Use `self.camera.set_focus()` for automatic depth-of-field.
+12. **Quality Control (v3)**: Set `obj.render_quality` per object. Values < 1.0 = chunkier, > 1.0 = smoother.
