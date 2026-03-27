@@ -289,6 +289,18 @@ class BarChart(PObject):
                     if ch in _MINI_DIGITS:
                         NumberLine._draw_mini_char(canvas, ch, lbl_x + ci * 4,
                                                    lbl_y, label_color)
+                    else:
+                        # Fall back to main 5x7 font for letters
+                        from pixelengine.text import _render_glyph, GLYPH_WIDTH, GLYPH_SPACING
+                        glyph = _render_glyph(ch)
+                        for row_idx, row in enumerate(glyph):
+                            for col_idx, pixel in enumerate(row):
+                                if pixel == '#':
+                                    canvas.set_pixel(
+                                        lbl_x + ci * 4 + col_idx,
+                                        lbl_y + row_idx,
+                                        label_color,
+                                    )
 
 
 class _BarChartBuild:

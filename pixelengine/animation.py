@@ -109,6 +109,7 @@ class Animation:
         self.target = target
         self.easing = get_easing(easing)
         self._started = False
+        self._completed = False
 
     def interpolate(self, raw_alpha: float):
         """Called each frame with raw alpha (0→1). Applies easing."""
@@ -118,7 +119,8 @@ class Animation:
             self.on_start()
             self._started = True
         self.update(eased)
-        if alpha >= 1.0:
+        if alpha >= 1.0 and not self._completed:
+            self._completed = True
             self.on_complete()
 
     def on_start(self):
@@ -313,6 +315,11 @@ class Sequence:
         # Find which animation is active
         segment = 1.0 / n
         idx = min(int(alpha / segment), n - 1)
+        # Finalize all previous animations that haven't been finalized yet
+        for i in range(idx):
+            if not getattr(self.animations[i], '_seq_finalized', False):
+                self.animations[i].interpolate(1.0)
+                self.animations[i]._seq_finalized = True
         local_alpha = (alpha - idx * segment) / segment
         local_alpha = max(0.0, min(1.0, local_alpha))
         self.animations[idx].interpolate(local_alpha)

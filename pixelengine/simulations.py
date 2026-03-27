@@ -38,6 +38,7 @@ class Pendulum(PObject):
         self.bob_radius = bob_radius
         self.string_color = parse_color(string_color)
         self.z_index = 50
+        self._fps: int = 24  # Set by Scene to actual FPS
 
     @property
     def bob_x(self) -> int:
@@ -52,7 +53,7 @@ class Pendulum(PObject):
             return
 
         # Step physics
-        dt = 1.0 / 12
+        dt = 1.0 / self._fps
         alpha = -self.gravity / self.length * math.sin(self.theta)
         self.omega += alpha * dt
         self.omega *= self.damping
@@ -128,13 +129,14 @@ class Spring(PObject):
         self.spring_color = parse_color(spring_color)
         self.mass_size = 8
         self.z_index = 50
+        self._fps: int = 24  # Set by Scene to actual FPS
 
     def render(self, canvas):
         if not self.visible:
             return
 
         # Step physics (Hooke's law: F = -kx)
-        dt = 1.0 / 12
+        dt = 1.0 / self._fps
         extension = self.position - self.rest_length
         force = -self.k * extension
         accel = force / self.mass_val
@@ -194,6 +196,7 @@ class OrbitalSystem(PObject):
         self.show_trails: bool = True
         self.trail_length: int = 30
         self._trails: dict = {}
+        self._fps: int = 24  # Set by Scene to actual FPS
 
     def add_body(self, x: float, y: float, mass: float = 1,
                  vx: float = 0, vy: float = 0, radius: int = 3,
@@ -214,7 +217,7 @@ class OrbitalSystem(PObject):
             return
 
         # Step physics
-        dt = 1.0 / 12
+        dt = 1.0 / self._fps
         n = len(self._bodies)
 
         # Calculate forces
@@ -290,6 +293,7 @@ class Rope(PObject):
         self.pin_end = pin_end
         self.iterations = iterations
         self.z_index = 50
+        self._fps: int = 24  # Set by Scene to actual FPS
 
         # Create points along a straight line
         self._points = []
@@ -310,7 +314,7 @@ class Rope(PObject):
         if not self.visible:
             return
 
-        dt = 1.0 / 12
+        dt = 1.0 / self._fps
         color = self.get_render_color()
 
         # Verlet integration
@@ -381,6 +385,7 @@ class FluidParticles(PObject):
         self.interaction_radius = interaction_radius
         self.color2 = parse_color(color2)
         self.z_index = 50
+        self._fps: int = 24  # Set by Scene to actual FPS
 
         # Initialize particles randomly
         self._particles = []
@@ -397,7 +402,7 @@ class FluidParticles(PObject):
         if not self.visible:
             return
 
-        dt = 1.0 / 12
+        dt = 1.0 / self._fps
         color = self.get_render_color()
         ir = self.interaction_radius
         ir_sq = ir * ir

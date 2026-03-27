@@ -150,11 +150,12 @@ class SoundFX:
         buf = io.BytesIO()
         # 24-bit PCM: scale to 24-bit range and pack as 3 bytes per sample
         pcm_32 = (self.samples * 8388607).astype(np.int32)  # 2^23 - 1
-        raw = bytearray()
-        for s in pcm_32:
-            # Pack as little-endian 3-byte signed integer
-            b = int(s) & 0xFFFFFF
-            raw.extend(b.to_bytes(3, byteorder='little'))
+        # Vectorized 24-bit packing: extract lower 3 bytes from each int32
+        pcm_bytes = pcm_32.astype('<i4').tobytes()
+        raw = bytearray(len(pcm_32) * 3)
+        raw[0::3] = pcm_bytes[0::4]
+        raw[1::3] = pcm_bytes[1::4]
+        raw[2::3] = pcm_bytes[2::4]
         with wave.open(buf, 'wb') as wf:
             wf.setnchannels(1)
             wf.setsampwidth(3)  # 24-bit
@@ -433,12 +434,13 @@ class SoundTimeline:
         """Mix and export as 24-bit WAV bytes."""
         mixed = self.mix(total_duration)
         buf = io.BytesIO()
-        # 24-bit PCM
+        # 24-bit PCM — vectorized packing
         pcm_32 = (mixed * 8388607).astype(np.int32)
-        raw = bytearray()
-        for s in pcm_32:
-            b = int(s) & 0xFFFFFF
-            raw.extend(b.to_bytes(3, byteorder='little'))
+        pcm_bytes = pcm_32.astype('<i4').tobytes()
+        raw = bytearray(len(pcm_32) * 3)
+        raw[0::3] = pcm_bytes[0::4]
+        raw[1::3] = pcm_bytes[1::4]
+        raw[2::3] = pcm_bytes[2::4]
         with wave.open(buf, 'wb') as wf:
             wf.setnchannels(1)
             wf.setsampwidth(3)  # 24-bit

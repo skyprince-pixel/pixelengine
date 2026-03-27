@@ -109,6 +109,7 @@ class ParticleEmitter(PObject):
         self._emit_timer: float = 0
         self.emitting: bool = True
         self._burst_done: bool = False
+        self._fps: int = 24  # Set by Scene to actual FPS
 
     def _spawn(self, count: int = 1):
         """Spawn particles."""
@@ -162,7 +163,7 @@ class ParticleEmitter(PObject):
 
         # Update and draw particles
         alive = []
-        dt = 1.0 / 12  # Approximate frame time at default FPS
+        dt = 1.0 / self._fps
         for p in self._particles:
             p.life -= dt
             if p.life <= 0:
@@ -606,12 +607,13 @@ class ScreenFlash(PObject):
         self.duration = duration
         self._timer: float = 0
         self.z_index = 9990
+        self._fps: int = 24  # Set by Scene to actual FPS
 
     def render(self, canvas):
         if not self.visible:
             return
 
-        self._timer += 1.0 / 12  # approx frame time
+        self._timer += 1.0 / self._fps
         if self._timer >= self.duration:
             self.visible = False
             return

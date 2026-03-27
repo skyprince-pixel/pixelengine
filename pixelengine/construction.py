@@ -38,6 +38,10 @@ class GrowFromPoint(Animation):
         self.orig_y = self.target.y
         self.orig_scale_x = self.target.scale_x
         self.orig_scale_y = self.target.scale_y
+        # Set _base_width/_base_height so update() can scale dimensions
+        if hasattr(self.target, 'width') and not hasattr(self.target, '_base_width'):
+            self.target._base_width = self.target.width
+            self.target._base_height = getattr(self.target, 'height', self.target.width)
         if self.point_x is None:
             cx = getattr(self.target, 'center_x', self.target.x)
             self.point_x = cx

@@ -261,6 +261,9 @@ class Scene:
 
         # Run updaters on all objects
         for obj in list(self._objects):
+            # Propagate scene FPS to objects that need it
+            if hasattr(obj, '_fps'):
+                obj._fps = self.config.fps
             if hasattr(obj, '_updaters') and obj._updaters:
                 for updater in list(obj._updaters):
                     try:

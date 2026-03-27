@@ -30,10 +30,21 @@ class PhysicsBody:
         self.friction = friction         # Velocity damping
         self.is_static = is_static       # Static bodies don't move
         self.active = True
-        # Shape info for collision
-        self._radius = getattr(pobject, 'radius', None)
-        self._width = getattr(pobject, 'width', None)
-        self._height = getattr(pobject, 'height', None)
+
+    @property
+    def _radius(self):
+        """Live geometry from underlying PObject (not cached)."""
+        return getattr(self.pobject, 'radius', None)
+
+    @property
+    def _width(self):
+        """Live geometry from underlying PObject (not cached)."""
+        return getattr(self.pobject, 'width', None)
+
+    @property
+    def _height(self):
+        """Live geometry from underlying PObject (not cached)."""
+        return getattr(self.pobject, 'height', None)
 
     @property
     def x(self) -> float:

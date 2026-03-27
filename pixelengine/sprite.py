@@ -39,6 +39,7 @@ class Sprite(PObject):
         self._animation_finished: bool = False
 
         # Transform
+        self._fps: int = 24  # Set by Scene to actual FPS
         self.flip_h: bool = False
         self.flip_v: bool = False
         self.anchor_x: float = 0.0   # 0=left, 0.5=center, 1=right
@@ -190,7 +191,7 @@ class Sprite(PObject):
         # Auto-animate: advance frame based on timer
         if self.auto_animate and self._frames and len(self._frames) > 1:
             self._frame_timer += 1  # incremented each render call
-            if self._frame_timer >= self.frame_duration * 12:  # rough FPS-aware timing
+            if self._frame_timer >= self.frame_duration * self._fps:  # FPS-aware timing
                 self._frame_timer = 0
                 if self._current_state and self._states:
                     # State-based animation
