@@ -35,3 +35,4 @@ outputs/
 # Audio temp files
 full_audio.wav
 scene_*.wav
+examples/

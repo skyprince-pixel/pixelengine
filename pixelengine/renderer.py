@@ -1,9 +1,46 @@
-"""PixelEngine renderer — encodes frames to video via ffmpeg."""
+"""PixelEngine renderer — encodes frames to video via ffmpeg with CLI progress."""
 import subprocess
+import sys
+import time
 import shutil
 from pathlib import Path
 from PIL import Image
 from pixelengine.config import PixelConfig
+
+
+def _progress_bar(current: int, total: int, phase: str, start_time: float,
+                  bar_width: int = 30):
+    """Print an inline CLI progress bar with ETA."""
+    pct = current / total if total > 0 else 1.0
+    filled = int(bar_width * pct)
+    bar = "█" * filled + "░" * (bar_width - filled)
+
+    elapsed = time.time() - start_time
+    if current > 0:
+        eta = (elapsed / current) * (total - current)
+        fps = current / elapsed if elapsed > 0 else 0
+    else:
+        eta = 0
+        fps = 0
+
+    eta_str = f"{eta:.0f}s" if eta < 120 else f"{eta/60:.1f}m"
+
+    sys.stdout.write(
+        f"\r  {phase}: [{bar}] {pct*100:5.1f}% | "
+        f"{current}/{total} | "
+        f"{fps:.1f} fps | "
+        f"ETA: {eta_str}  "
+    )
+    sys.stdout.flush()
+
+    if current >= total:
+        elapsed_str = f"{elapsed:.1f}s" if elapsed < 120 else f"{elapsed/60:.1f}m"
+        sys.stdout.write(
+            f"\r  {phase}: [{bar}] 100.0% | "
+            f"{total}/{total} | "
+            f"done in {elapsed_str}       \n"
+        )
+        sys.stdout.flush()
 
 
 class Renderer:
@@ -61,6 +98,8 @@ class Renderer:
         )
 
         total = len(frames)
+        start_time = time.time()
+
         for i, frame in enumerate(frames):
             # Convert RGBA → RGB (flatten onto black background)
             if frame.mode == "RGBA":
@@ -73,11 +112,8 @@ class Renderer:
             # Write raw pixel bytes to ffmpeg stdin
             process.stdin.write(frame.tobytes())
 
-            # Progress indicator (every 5 seconds of video or last frame)
-            if (i + 1) % (fps * 5) == 0 or i == total - 1:
-                seconds = (i + 1) / fps
-                pct = int((i + 1) / total * 100)
-                print(f"  Encoding: {seconds:.1f}s — {pct}% ({i+1}/{total} frames)")
+            # Update progress bar every frame
+            _progress_bar(i + 1, total, "Encoding", start_time)
 
         process.stdin.close()
         process.wait()

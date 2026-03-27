@@ -1,5 +1,7 @@
 """PixelEngine Scene — the core orchestrator for animations and sound."""
 import os
+import sys
+import time
 import tempfile
 from pixelengine.config import PixelConfig, DEFAULT_CONFIG
 from pixelengine.canvas import Canvas
@@ -255,6 +257,20 @@ class Scene:
         self._current_time += dt
         self.camera.update(dt)
 
+        # Progress bar (updated every frame during construct)
+        if hasattr(self, '_render_start_time'):
+            frame_count = len(self._frames) + 1
+            elapsed = time.time() - self._render_start_time
+            fps = frame_count / elapsed if elapsed > 0 else 0
+            bar_w = 30
+            # We don't know total frames ahead of time, so show a spinner + stats
+            spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[frame_count % 10]
+            sys.stdout.write(
+                f"\r  {spinner} Rendering: {frame_count} frames "
+                f"({self._current_time:.1f}s) | {fps:.1f} fps  "
+            )
+            sys.stdout.flush()
+
         # Run physics simulation if world exists
         if hasattr(self, 'physics') and self.physics is not None:
             self.physics.step(dt)
@@ -371,8 +387,6 @@ class Scene:
             output_path: Optional exact path for the output video file. If provided,
                          bypasses the auto-organization system.
         """
-        import sys
-        import os
         import shutil
 
         print(f"[PixelEngine] Building scene: {self.__class__.__name__}")
@@ -388,7 +402,11 @@ class Scene:
         self._current_time = 0
         self._sound_timeline = SoundTimeline()
         self._last_tw_char_count = {}
+        self._render_start_time = time.time()
         self.construct()
+        # Clear the rendering spinner line
+        sys.stdout.write("\r" + " " * 80 + "\r")
+        sys.stdout.flush()
 
         total_seconds = len(self._frames) / self.config.fps
         sound_count = self._sound_timeline.event_count
