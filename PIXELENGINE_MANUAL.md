@@ -229,6 +229,29 @@ scene.play(tracker.animate_to(100), duration=2.0)
 
 ---
 
+## 3.10 Rigid-Body Physics (v0.5.0)
+
+PixelEngine natively supports 2D rigid-body physics via the `pymunk` backend. Objects can fall, bounce, and collide realistically.
+
+```python
+from pixelengine import PhysicsWorld, PhysicsBody
+
+# Create a physics world with gravity pulling down
+physics = PhysicsWorld(gravity_y=200, bounds=(0, 0, 480, 270))
+
+ball = Circle(radius=10, x=240, y=50, color="#FF004D")
+# Create a physics body wrapping the visual object
+body = PhysicsBody(ball, mass=1.0, restitution=0.8)
+
+scene.add(ball)
+physics.add_body(body)
+
+# The physics world automatically step()s during wait() or play()
+scene.wait(3.0) 
+```
+
+---
+
 ## 4. Sprites
 
 ```python
@@ -367,3 +390,4 @@ See v2 docs. `PatternTexture`, `Cube3D`, `Pendulum`, `PhysicsWorld`, etc.
 10. **Keyframes (v4)**: Use `KeyframeTrack(obj).add(at=0.0, ...).add(at=1.0, ...).build()` for timeline animations.
 11. **Text Animations (v4)**: `PerCharacter(text, "fade_in", lag=0.05)` for staggered text. `ScrambleReveal` for Matrix-style.
 12. **Reactive Links (v4)**: `obj.add_updater(Link(source))` for following. `ReactTo(source, fn)` for custom reactions.
+13. **Performance (v0.5.0)**: Don't hesitate to use dense particle effects, dynamic lighting, and real rigid-body `PhysicsWorld` + `PhysicsBody` dynamics. PyAV and Pymunk handle it effortlessly.

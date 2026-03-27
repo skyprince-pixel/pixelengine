@@ -1022,7 +1022,6 @@ class ParticleBurst:
     """
 
     def __init__(self, scene, particles: list = None, mode: str = "explode"):
-        super().__init__()
         self.scene = scene
         self._particles = particles or []
         self.mode = mode

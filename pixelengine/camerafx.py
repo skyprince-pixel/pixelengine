@@ -105,7 +105,7 @@ class Vignette:
         enabled: Whether the effect is active.
     """
 
-    def __init__(self, intensity: float = 0.5, radius: float = 0.7,
+    def __init__(self, intensity: float = 0.3, radius: float = 0.7,
                  enabled: bool = True):
         self.intensity = max(0.0, min(1.0, intensity))
         self.radius = max(0.1, min(1.0, radius))

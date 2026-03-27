@@ -548,7 +548,7 @@ def _mux_pyav(video_path: str, audio_wav_path: str, output_path: str):
         output = av.open(output_path, 'w')
 
         # Add streams
-        video_stream = output.add_stream(template=video_in.streams.video[0])
+        video_stream = output.add_stream_from_template(video_in.streams.video[0])
         audio_stream = output.add_stream('aac', rate=SAMPLE_RATE)
         audio_stream.bit_rate = 256000
 

@@ -14,11 +14,11 @@ class Keyframe:
 
     Args:
         at: Normalized time position (0.0–1.0).
-        easing: Easing function for interpolation TO this keyframe.
+        easing: Easing function for interpolation TO this keyframe (keyword-only).
         **props: Property name=value pairs to set at this time.
     """
 
-    def __init__(self, at: float = 0.0, easing=linear, **props):
+    def __init__(self, at: float = 0.0, *, easing=linear, **props):
         self.at = max(0.0, min(1.0, at))
         self.easing = get_easing(easing) if easing else linear
         self.props = props

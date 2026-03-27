@@ -19,15 +19,17 @@ class AmbientLight:
 
     Usage::
 
-        ambient = AmbientLight(intensity=0.3, color="#FFFFFF")
+        ambient = AmbientLight(intensity=1.0, color="#FFFFFF")
         scene.add_light(ambient)
 
     Args:
         intensity: Light level from 0.0 (pitch black) to 1.0 (full bright).
+                   Default is 1.0 (full brightness) so adding lights never
+                   darkens the scene unless explicitly desired.
         color: Tint color for the ambient light.
     """
 
-    def __init__(self, intensity: float = 0.3, color: str = "#FFFFFF"):
+    def __init__(self, intensity: float = 1.0, color: str = "#FFFFFF"):
         self.intensity = max(0.0, min(1.0, intensity))
         self.color = parse_color(color)
         self.enabled: bool = True
@@ -302,6 +304,13 @@ class LightingEngine:
         """
         if not lights:
             return
+
+        # Auto-inject a full-brightness ambient light if none exists.
+        # This prevents accidental dark scenes when users only add
+        # PointLight or DirectionalLight without an explicit AmbientLight.
+        has_ambient = any(isinstance(l, AmbientLight) for l in lights)
+        if not has_ambient:
+            lights = [AmbientLight(intensity=1.0)] + list(lights)
 
         w, h = canvas.width, canvas.height
 

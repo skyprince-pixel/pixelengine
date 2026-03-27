@@ -26,7 +26,7 @@ class Pendulum(PObject):
                  length: int = 60, angle: float = 45,
                  damping: float = 0.995, gravity: float = 200,
                  bob_radius: int = 4, color: str = "#FF004D",
-                 string_color: str = "#C2C3C7"):
+                 string_color: str = "#C2C3C7", mass: float = 1.0):
         super().__init__(x=pivot_x, y=pivot_y, color=color)
         self.pivot_x = pivot_x
         self.pivot_y = pivot_y
@@ -36,6 +36,7 @@ class Pendulum(PObject):
         self.damping = damping
         self.gravity = gravity
         self.bob_radius = bob_radius
+        self.mass = mass
         self.string_color = parse_color(string_color)
         self.z_index = 50
         self._fps: int = 24  # Set by Scene to actual FPS
