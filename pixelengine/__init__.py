@@ -1,5 +1,5 @@
 """PixelEngine — A code-first pixel art animation engine."""
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -74,8 +74,26 @@ from pixelengine.text import PixelText, TypeWriter
 # ── Sprite ──────────────────────────────────────────────────
 from pixelengine.sprite import Sprite
 
-# ── Camera ──────────────────────────────────────────────────
+# ── Camera ──────────────────────────────────────────────
 from pixelengine.camera import Camera, CameraPan, CameraZoom, CameraCenterOn
+
+# ── Lighting ────────────────────────────────────────────
+from pixelengine.lighting import (
+    AmbientLight,
+    PointLight,
+    DirectionalLight,
+    LightingEngine,
+)
+
+# ── Camera Effects ──────────────────────────────────────
+from pixelengine.camerafx import (
+    DepthOfField,
+    Vignette,
+    ChromaticAberration,
+    Letterbox,
+    FilmGrain,
+    CameraFXPipeline,
+)
 
 # ── Background ──────────────────────────────────────────────
 from pixelengine.background import (
@@ -173,6 +191,11 @@ __all__ = [
     "Sprite",
     # Camera
     "Camera", "CameraPan", "CameraZoom", "CameraCenterOn",
+    # Lighting
+    "AmbientLight", "PointLight", "DirectionalLight", "LightingEngine",
+    # Camera Effects
+    "DepthOfField", "Vignette", "ChromaticAberration",
+    "Letterbox", "FilmGrain", "CameraFXPipeline",
     # Background
     "Background", "GradientBackground", "Starfield", "ParallaxLayer",
     # Effects

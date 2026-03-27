@@ -51,6 +51,11 @@ class Camera:
         self._shake_offset_y: float = 0
         self._shake_frequency: float = 30.0  # Higher = faster vibrations
 
+        # Focus (depth-of-field)
+        self.focus_x: float = None   # World coord for focus point (None = no focus)
+        self.focus_y: float = None
+        self.focus_radius: float = 30  # Radius of sharp focus area (pixels)
+
     # ── Position ────────────────────────────────────────────
 
     def pan_to(self, x: float, y: float):
@@ -123,6 +128,30 @@ class Camera:
     def unfollow(self):
         """Stop following any target."""
         self._follow_target = None
+
+    # ── Focus ──────────────────────────────────────────────
+
+    def set_focus(self, x: float, y: float, radius: float = None):
+        """Set the focus point for depth-of-field effect.
+
+        Args:
+            x, y: World coordinates of the focus center.
+            radius: Optional focus radius in pixels.
+        """
+        self.focus_x = x
+        self.focus_y = y
+        if radius is not None:
+            self.focus_radius = max(1, radius)
+
+    def clear_focus(self):
+        """Remove the focus point (disable depth-of-field)."""
+        self.focus_x = None
+        self.focus_y = None
+
+    @property
+    def has_focus(self) -> bool:
+        """Whether a focus point is set."""
+        return self.focus_x is not None and self.focus_y is not None
 
     # ── Shake ───────────────────────────────────────────────
 

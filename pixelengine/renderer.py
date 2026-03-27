@@ -49,7 +49,7 @@ class Renderer:
             "-c:v", "libx264",                      # H.264 codec
             "-pix_fmt", "yuv420p",                  # output pixel format
             "-preset", "fast",                      # encoding speed
-            "-crf", "18",                           # quality (lower = better)
+            "-crf", "15",                           # quality (lower = better)
             str(output_path),
         ]
 

@@ -86,6 +86,39 @@ class Canvas:
             return rgb.tobytes()
         return frame.convert("RGB").tobytes()
 
+    def blit_quality(self, image: Image.Image, x: int, y: int, quality: float):
+        """Paste an image with quality scaling for multi-resolution rendering.
+
+        Args:
+            image: Source RGBA image to blit.
+            x, y: Destination position on the canvas.
+            quality: Resolution multiplier.
+                - quality > 1.0: Render larger, then downscale with bilinear
+                  filtering for a smoother, anti-aliased look.
+                - quality < 1.0: Render smaller, then upscale with nearest-
+                  neighbor for a chunkier, extra-pixelated look.
+                - quality == 1.0: Normal pass-through.
+        """
+        if abs(quality - 1.0) < 0.01:
+            self.blit(image, x, y)
+            return
+
+        w, h = image.size
+        if quality > 1.0:
+            # Upscale then downscale with bilinear to smooth
+            up_w = max(1, int(w * quality))
+            up_h = max(1, int(h * quality))
+            upscaled = image.resize((up_w, up_h), Image.Resampling.BILINEAR)
+            smoothed = upscaled.resize((w, h), Image.Resampling.BILINEAR)
+            self.blit(smoothed, x, y)
+        else:
+            # Downscale then upscale with nearest-neighbor for chunkier look
+            down_w = max(1, int(w * quality))
+            down_h = max(1, int(h * quality))
+            downscaled = image.resize((down_w, down_h), Image.Resampling.NEAREST)
+            chunky = downscaled.resize((w, h), Image.Resampling.NEAREST)
+            self.blit(chunky, x, y)
+
     @staticmethod
     def _alpha_blend(
         fg: tuple, bg: tuple

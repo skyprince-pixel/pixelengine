@@ -6,6 +6,8 @@ from pixelengine.canvas import Canvas
 from pixelengine.camera import Camera
 from pixelengine.renderer import Renderer
 from pixelengine.sound import SoundFX, SoundTimeline, mux_audio_video
+from pixelengine.lighting import LightingEngine
+from pixelengine.camerafx import CameraFXPipeline, DepthOfField
 
 
 class Scene:
@@ -46,6 +48,13 @@ class Scene:
         # TypeWriter auto-sound state (per-instance, not class-level)
         self._last_tw_char_count: dict = {}
 
+        # Lighting system
+        self._lights: list = []
+        self._lighting_engine = LightingEngine()
+
+        # Camera post-processing FX pipeline
+        self._camera_fx = CameraFXPipeline()
+
     # ── User overrides ──────────────────────────────────────
 
     def construct(self):
@@ -70,6 +79,57 @@ class Scene:
                 self._objects.remove(obj)
         return self
 
+    # ── Lighting ────────────────────────────────────────────
+
+    def add_light(self, *lights) -> "Scene":
+        """Add one or more lights to the scene.
+
+        Supports AmbientLight, PointLight, DirectionalLight.
+
+        Usage::
+
+            scene.add_light(AmbientLight(intensity=0.2))
+            scene.add_light(PointLight(x=128, y=72, radius=60))
+        """
+        for light in lights:
+            if light not in self._lights:
+                self._lights.append(light)
+                # PointLights are also PObjects — add to scene for animation
+                from pixelengine.lighting import PointLight
+                if isinstance(light, PointLight):
+                    self.add(light)
+        return self
+
+    def remove_light(self, *lights) -> "Scene":
+        """Remove lights from the scene."""
+        for light in lights:
+            if light in self._lights:
+                self._lights.remove(light)
+                from pixelengine.lighting import PointLight
+                if isinstance(light, PointLight):
+                    self.remove(light)
+        return self
+
+    # ── Camera FX ───────────────────────────────────────────
+
+    def add_camera_fx(self, *effects) -> "Scene":
+        """Add post-processing effects to the camera FX pipeline.
+
+        Usage::
+
+            scene.add_camera_fx(Vignette(intensity=0.5))
+            scene.add_camera_fx(ChromaticAberration(offset=2))
+        """
+        for fx in effects:
+            self._camera_fx.add(fx)
+        return self
+
+    def remove_camera_fx(self, *effects) -> "Scene":
+        """Remove effects from the camera FX pipeline."""
+        for fx in effects:
+            self._camera_fx.remove(fx)
+        return self
+
     # ── Sound ───────────────────────────────────────────────
 
     def play_sound(self, sfx: SoundFX, at: float = None):
@@ -82,23 +142,39 @@ class Scene:
         time = at if at is not None else self._current_time
         self._sound_timeline.add(sfx, time)
 
-    def play_voiceover(self, text: str, voice: str = None, speed: float = 1.0):
-        """Generate and play a Chatterbox Turbo AI voiceover, holding the
-        frame for the duration of the speech.
+    def play_voiceover(self, text: str, voice: str = None, speed: float = 1.0, engine: str = "kokoro"):
+        """Generate and play an AI voiceover, holding the frame for the duration.
 
         Supports paralinguistic tags: [laugh], [chuckle], [cough].
 
         Args:
             text: Text for the voiceover to speak.
-            voice: Optional path to a ~10s reference .wav for voice cloning.
-                   If None, uses the model's default voice.
+            voice: Optional path to a ~10s reference .wav for voice cloning
+                   (chatterbox), or voice name like "af_bella" (kokoro).
             speed: Speed multiplier (default 1.0).
+            engine: "kokoro" or "chatterbox".
         """
         from pixelengine.voiceover import VoiceOver
-        sfx, duration = VoiceOver.generate(text, voice=voice, speed=speed)
+        sfx, duration = VoiceOver.generate(text, voice=voice, speed=speed, engine=engine)
         self.play_sound(sfx)
         print(f"[PixelEngine] VoiceOver: '{text[:30]}...' ({duration:.2f}s)")
         self.wait(duration)
+
+    def preload_voiceovers(self, texts: list, voice: str = None,
+                           speed: float = 1.0, engine: str = "kokoro"):
+        """Pre-generate all voiceovers to populate cache before construct().
+
+        This front-loads TTS work so play_voiceover() calls during
+        construct() load from cache instantly.
+
+        Args:
+            texts: List of voiceover text strings to pre-generate.
+            voice: Optional voice reference for all lines.
+            speed: Speed multiplier for all lines.
+            engine: "kokoro" or "chatterbox".
+        """
+        from pixelengine.voiceover import VoiceOver
+        VoiceOver.preload(texts, voice=voice, speed=speed, engine=engine)
 
     # ── Timing ──────────────────────────────────────────────
 
@@ -210,13 +286,73 @@ class Scene:
                 orig_x, orig_y = obj.x, obj.y
                 screen_x, screen_y = self.camera.world_to_screen(obj.x, obj.y)
                 obj.x, obj.y = screen_x, screen_y
-                obj.render(self.canvas)
+                self._render_object(obj)
                 obj.x, obj.y = orig_x, orig_y
             else:
-                obj.render(self.canvas)
+                self._render_object(obj)
+
+        # ── Lighting pass ──
+        if self._lights:
+            self._lighting_engine.apply(self.canvas, self._lights, sorted_objects)
+
+        # ── Camera FX pipeline (depth-of-field auto-sync with camera) ──
+        if self.camera.has_focus:
+            # Auto-create or update DepthOfField from camera focus
+            self._sync_camera_focus()
 
         frame = self.canvas.get_frame(self.config.upscale)
+
+        # Apply camera FX to the upscaled frame
+        if self._camera_fx.count > 0:
+            frame = self._camera_fx.apply(frame)
+
         self._frames.append(frame)
+
+    def _render_object(self, obj):
+        """Render a single object, applying per-object quality if needed."""
+        quality = getattr(obj, 'render_quality', 1.0)
+        if abs(quality - 1.0) < 0.01:
+            obj.render(self.canvas)
+        else:
+            # Render to a temporary sub-canvas at adjusted resolution
+            from PIL import Image
+            w = getattr(obj, 'width', 16) or 16
+            h = getattr(obj, 'height', 16) or 16
+            # Ensure reasonable size
+            w = max(4, min(self.canvas.width, int(w * 1.5)))
+            h = max(4, min(self.canvas.height, int(h * 1.5)))
+            temp_canvas = Canvas(w, h, "#00000000")
+            temp_canvas._image = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            orig_x, orig_y = obj.x, obj.y
+            obj.x = w // 4  # Offset inside temp canvas
+            obj.y = h // 4
+            obj.render(temp_canvas)
+            obj.x, obj.y = orig_x, orig_y
+            # Blit with quality scaling
+            self.canvas.blit_quality(
+                temp_canvas._image,
+                int(orig_x), int(orig_y),
+                quality,
+            )
+
+    def _sync_camera_focus(self):
+        """Sync camera focus point with DepthOfField effect."""
+        # Find existing DoF or add one
+        dof = None
+        for fx in self._camera_fx._effects:
+            if isinstance(fx, DepthOfField):
+                dof = fx
+                break
+        if dof is None:
+            dof = DepthOfField(enabled=True)
+            self._camera_fx.add(dof)
+
+        # Convert world focus to screen coords
+        sx, sy = self.camera.world_to_screen(self.camera.focus_x, self.camera.focus_y)
+        # Scale to upscaled frame coords
+        dof.focus_x = int(sx * self.config.upscale)
+        dof.focus_y = int(sy * self.config.upscale)
+        dof.focus_radius = int(self.camera.focus_radius * self.config.upscale)
 
     # ── Video output ────────────────────────────────────────
 

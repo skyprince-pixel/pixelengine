@@ -1,4 +1,4 @@
-"""PixelEngine sound — procedural 8-bit sound effect synthesis.
+"""PixelEngine sound — procedural high-quality sound effect synthesis.
 
 All sounds are generated purely from math (sine, square, noise, etc.)
 using NumPy. No external audio files needed. Sounds are mixed into a
@@ -22,7 +22,7 @@ import tempfile
 import numpy as np
 
 
-SAMPLE_RATE = 22050  # Good enough for 8-bit style
+SAMPLE_RATE = 48000  # High-quality audio (48kHz CD-quality)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -146,14 +146,20 @@ class SoundFX:
         return len(self.samples) / self.sample_rate
 
     def to_wav_bytes(self) -> bytes:
-        """Export as WAV file bytes."""
+        """Export as 24-bit WAV file bytes."""
         buf = io.BytesIO()
-        pcm = (self.samples * 32767).astype(np.int16)
+        # 24-bit PCM: scale to 24-bit range and pack as 3 bytes per sample
+        pcm_32 = (self.samples * 8388607).astype(np.int32)  # 2^23 - 1
+        raw = bytearray()
+        for s in pcm_32:
+            # Pack as little-endian 3-byte signed integer
+            b = int(s) & 0xFFFFFF
+            raw.extend(b.to_bytes(3, byteorder='little'))
         with wave.open(buf, 'wb') as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(2)
+            wf.setsampwidth(3)  # 24-bit
             wf.setframerate(self.sample_rate)
-            wf.writeframes(pcm.tobytes())
+            wf.writeframes(bytes(raw))
         return buf.getvalue()
 
     def save(self, path: str):
@@ -424,15 +430,20 @@ class SoundTimeline:
         return mix_buf
 
     def to_wav_bytes(self, total_duration: float) -> bytes:
-        """Mix and export as WAV bytes."""
+        """Mix and export as 24-bit WAV bytes."""
         mixed = self.mix(total_duration)
         buf = io.BytesIO()
-        pcm = (mixed * 32767).astype(np.int16)
+        # 24-bit PCM
+        pcm_32 = (mixed * 8388607).astype(np.int32)
+        raw = bytearray()
+        for s in pcm_32:
+            b = int(s) & 0xFFFFFF
+            raw.extend(b.to_bytes(3, byteorder='little'))
         with wave.open(buf, 'wb') as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(2)
+            wf.setsampwidth(3)  # 24-bit
             wf.setframerate(SAMPLE_RATE)
-            wf.writeframes(pcm.tobytes())
+            wf.writeframes(bytes(raw))
         return buf.getvalue()
 
     def save_wav(self, path: str, total_duration: float):
@@ -460,7 +471,7 @@ def mux_audio_video(video_path: str, audio_wav_path: str,
         "-i", audio_wav_path,
         "-c:v", "copy",
         "-c:a", "aac",
-        "-b:a", "128k",
+        "-b:a", "256k",
         "-shortest",
         output_path,
     ]

@@ -22,6 +22,14 @@ class PObject:
         self._children: list = []
         self._updaters: list = []        # Per-frame update callbacks: fn(obj, dt)
 
+        # Lighting interaction
+        self.casts_shadow: bool = False   # Whether this object casts shadows
+        self.receives_light: bool = True  # Whether lighting affects this object
+        self.shadow_opacity: float = 0.4  # Shadow darkness (0.0–1.0)
+
+        # Per-object quality control
+        self.render_quality: float = 1.0  # 0.25=chunky, 1.0=normal, 2.0=smooth
+
     # ── Position ────────────────────────────────────────────
 
     def move_to(self, x: int, y: int) -> "PObject":
