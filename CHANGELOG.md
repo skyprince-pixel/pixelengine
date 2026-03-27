@@ -1,8 +1,19 @@
 # Changelog
 
 All notable changes to PixelEngine will be documented in this file.
-
-## [0.2.0] — 2026-03-27
+ 
+ ## [0.6.0] — 2026-03-27
+ 
+ ### Added
+ - **Resolution-independent Vector Graphics**: `VPath`, `VCircle`, `VRect`, `VPolygon`, `VArrow`, `Vector`
+ - **SVG Support**: `SVGMobject(file_path)` for importing and rendering external SVG files
+ - Full integration of Vector objects with construction animations (`Create`, `Uncreate`, `DrawBorderThenFill`)
+ 
+ ### Fixed
+ - Render quality sync for child-objects in `Scene._render_object`
+ - `AmbientLight` default intensity now correctly applied across all surfaces
+ 
+ ## [0.2.0] — 2026-03-27
 
 ### Added
 - **Manim-like construction animations**: `Create`, `Uncreate`, `GrowFromPoint`, `GrowFromEdge`, `DrawBorderThenFill`, `ShowPassingFlash`, `GrowArrow`

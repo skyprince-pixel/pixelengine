@@ -14,6 +14,7 @@ https://github.com/user-attachments/assets/placeholder
 ## ✨ Features
 
 - **Shapes** — `Rect`, `Circle`, `Line`, `Triangle`, `Polygon`
+- **Vector Graphics** — `VPath`, `VCircle`, `VRect`, `VPolygon`, `VArrow`, `Vector`
 - **Animations** — `MoveTo`, `FadeIn`, `Scale`, `Rotate`, `ColorShift`, `Sequence`, `AnimationGroup`
 - **Manim-like construction** — `Create`, `Uncreate`, `GrowFromPoint`, `DrawBorderThenFill`, `GrowArrow`
 - **Transform animations** — `MorphTo`, `ReplacementTransform`

@@ -1,5 +1,4 @@
-"""PixelEngine — A code-first pixel art animation engine."""
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -145,6 +144,12 @@ from pixelengine.camerafx import (
     CameraFXPipeline,
 )
 
+# ── Vector Graphics (v4) ────────────────────────────────────
+from pixelengine.vector import (
+    VectorObject, SVGMobject,
+    VPath, VLine, VCircle, VRect, VPolygon, VArrow, Vector,
+)
+
 # ── Background ──────────────────────────────────────────────
 from pixelengine.background import (
     Background,
@@ -261,6 +266,9 @@ __all__ = [
     "DynamicCaption", "DynamicCaptionTrack",
     # Math Objects
     "ValueTracker", "NumberLine", "BarChart", "Axes", "Graph", "Dot",
+    # Vector
+    "VectorObject", "SVGMobject",
+    "VPath", "VLine", "VCircle", "VRect", "VPolygon", "VArrow", "Vector",
     # Text
     "PixelText", "TypeWriter",
     # Sprite

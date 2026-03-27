@@ -1,4 +1,4 @@
-# PixelEngine v0.5.0
+# PixelEngine v0.6.0
 
 **PixelEngine** is a specialized, code-first Python framework for generating educational, animated pixel art videos. It renders at a configurable canvas resolution (default **480×270**) and upscales with nearest-neighbor to **1920×1080** (Full HD) for crisp pixel edges.
 
@@ -390,10 +390,36 @@ scene.add(graph)
 ---
 
 ## 18. Outputs & File Organization
-
-`scene.render()` auto-organizes to `outputs/<script>/`.
-
----
+ 
+ `scene.render()` auto-organizes to `outputs/<script>/`.
+ 
+ ---
+ 
+ ## 19. Vector Graphics (v0.6.0)
+ 
+ High-performance, resolution-independent shapes based on `svgelements`. These paths are sampled at render-time, allowing for perfectly smooth curves and progressive drawing animations.
+ 
+ - `VPath(path_data, ...)` — Arbitrary SVG path string or object.
+ - `VLine(x1, y1, x2, y2, ...)` — Smooth parametric line.
+ - `VCircle(radius, cx, cy, ...)` — Smooth parametric circle/arc.
+ - `VRect(width, height, rx, x, y, ...)` — Smooth rectangle with rounded corners.
+ - `VPolygon(points, ...)` — Closed polygon from vertex list.
+ - `VArrow(x1, y1, x2, y2, ...)` — Line with a triangular arrowhead.
+ - `Vector(dx, dy, origin_x, origin_y, ...)` — Mathematical arrow with optional label.
+ - `SVGMobject(file_path, ...)` — Load and render external SVG files.
+ 
+ **Animation Compatibility**:
+ All `VectorObject` types support `Create()`, `Uncreate()`, and `DrawBorderThenFill()` for progressive reveals.
+ 
+ ```python
+ from pixelengine import VCircle, DrawBorderThenFill
+ 
+ circle = VCircle(radius=50, cx=240, cy=135, color="#00E436", fill_color="#006622")
+ scene.add(circle)
+ scene.play(DrawBorderThenFill(circle), duration=2.0)
+ ```
+ 
+ ---
 <br>
 
 # 🤖 Special Guide for AI Agents
@@ -434,11 +460,13 @@ scene.add(graph)
        PerCharacter, PerWord, ScrambleReveal, TypeWriterPro,
        # v4 Transitions
        PixelateTransition, GlitchTransition, ShatterTransition, CrossDissolve,
-       # v4 Particle Bursts
-       ParticleBurst,
-       # v4 Reactive Links
-       Link, ReactTo,
-   )
+        # v4 Particle Bursts
+        ParticleBurst,
+        # v4 Reactive Links
+        Link, ReactTo,
+        # v0.6.0 Vector Graphics
+        VPath, VLine, VCircle, VRect, VPolygon, VArrow, Vector, SVGMobject,
+    )
    ```
 5. **No File dependencies**: Use procedural generation only.
 6. **VoiceOver** is blocking. For simultaneous animation + speech, use `VoiceOver.generate()`.
