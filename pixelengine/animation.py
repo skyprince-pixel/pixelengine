@@ -218,6 +218,10 @@ class Scale(Animation):
     def on_start(self):
         self.start_scale_x = self.target.scale_x
         self.start_scale_y = self.target.scale_y
+        # Capture original dimensions before scaling begins
+        if hasattr(self.target, 'width') and not hasattr(self.target, '_orig_width'):
+            self.target._orig_width = self.target.width
+            self.target._orig_height = self.target.height
 
     def update(self, alpha: float):
         current_factor = 1.0 + (self.factor - 1.0) * alpha
@@ -227,12 +231,6 @@ class Scale(Animation):
         if hasattr(self.target, '_orig_width'):
             self.target.width = int(self.target._orig_width * self.target.scale_x)
             self.target.height = int(self.target._orig_height * self.target.scale_y)
-
-    def on_complete(self):
-        # Store original dimensions for future scaling
-        if hasattr(self.target, 'width') and not hasattr(self.target, '_orig_width'):
-            self.target._orig_width = self.target.width
-            self.target._orig_height = self.target.height
 
 
 class Rotate(Animation):

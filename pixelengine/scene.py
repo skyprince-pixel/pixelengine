@@ -43,6 +43,9 @@ class Scene:
         self._current_time: float = 0  # Tracks elapsed time during construct()
         self.auto_sound: bool = True   # Enable auto-generated sounds
 
+        # TypeWriter auto-sound state (per-instance, not class-level)
+        self._last_tw_char_count: dict = {}
+
     # ── User overrides ──────────────────────────────────────
 
     def construct(self):
@@ -79,13 +82,16 @@ class Scene:
         time = at if at is not None else self._current_time
         self._sound_timeline.add(sfx, time)
 
-    def play_voiceover(self, text: str, voice: str = "af_bella", speed: float = 1.0):
-        """Generate and play a Kokoro AI voiceover, holding the frame
-        for the duration of the speech.
+    def play_voiceover(self, text: str, voice: str = None, speed: float = 1.0):
+        """Generate and play a Chatterbox Turbo AI voiceover, holding the
+        frame for the duration of the speech.
+
+        Supports paralinguistic tags: [laugh], [chuckle], [cough].
 
         Args:
             text: Text for the voiceover to speak.
-            voice: Voice ID (default 'af_bella').
+            voice: Optional path to a ~10s reference .wav for voice cloning.
+                   If None, uses the model's default voice.
             speed: Speed multiplier (default 1.0).
         """
         from pixelengine.voiceover import VoiceOver
@@ -148,7 +154,7 @@ class Scene:
             elif anim_type == "IrisTransition":
                 self.play_sound(SoundFX.whoosh())
 
-    _last_tw_char_count = {}
+    # _last_tw_char_count is now initialized per-instance in __init__
 
     def _auto_typewriter_sound(self, anim, alpha, frame_idx):
         """Generate typing clicks for TypeWriter animation."""
@@ -172,6 +178,25 @@ class Scene:
         dt = 1.0 / self.config.fps
         self._current_time += dt
         self.camera.update(dt)
+
+        # Run physics simulation if world exists
+        if hasattr(self, 'physics') and self.physics is not None:
+            self.physics.step(dt)
+
+        # Run updaters on all objects
+        for obj in list(self._objects):
+            if hasattr(obj, '_updaters') and obj._updaters:
+                for updater in list(obj._updaters):
+                    try:
+                        updater(obj, dt)
+                    except Exception as e:
+                        import warnings
+                        warnings.warn(
+                            f"[PixelEngine] Updater error on {obj.__class__.__name__}: {e}",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+
         self.canvas.clear()
 
         sorted_objects = sorted(self._objects, key=lambda o: o.z_index)
@@ -195,16 +220,22 @@ class Scene:
 
     # ── Video output ────────────────────────────────────────
 
-    def render(self, output_path: str = "output.mp4"):
+    def render(self, output_path: str = None):
         """Build the scene and encode to video with audio.
 
-        Calls ``construct()`` to generate frames and sound events,
-        then encodes video via ffmpeg, mixes in audio, and produces
-        the final MP4.
+        If `output_path` is None, automatically organizes generated files into:
+          outputs/<script_name>/<resolution_fps>/<SceneName>.mp4
+          outputs/<script_name>/audio/<SceneName>.wav
+          outputs/<script_name>/scripts/<script_name>.py (backup of the source)
 
         Args:
-            output_path: Path for the output video file.
+            output_path: Optional exact path for the output video file. If provided,
+                         bypasses the auto-organization system.
         """
+        import sys
+        import os
+        import shutil
+
         print(f"[PixelEngine] Building scene: {self.__class__.__name__}")
         print(
             f"  Canvas: {self.config.canvas_width}×{self.config.canvas_height} "
@@ -217,7 +248,7 @@ class Scene:
         self._frames = []
         self._current_time = 0
         self._sound_timeline = SoundTimeline()
-        Scene._last_tw_char_count = {}
+        self._last_tw_char_count = {}
         self.construct()
 
         total_seconds = len(self._frames) / self.config.fps
@@ -231,18 +262,62 @@ class Scene:
 
         renderer = Renderer(self.config)
 
-        if sound_count > 0:
-            # Render video to temp file, then mux with audio
-            with tempfile.TemporaryDirectory() as tmpdir:
-                tmp_video = os.path.join(tmpdir, "video_only.mp4")
-                tmp_audio = os.path.join(tmpdir, "audio.wav")
+        # ── Organize output files ──
+        if output_path is None:
+            import inspect
+            # Find the script that defined this scene subclass
+            module = sys.modules.get(self.__class__.__module__)
+            script_path = getattr(module, '__file__', sys.argv[0])
+            script_name = os.path.splitext(os.path.basename(script_path))[0]
+            if not script_name or script_name == "__main__":
+                script_name = "project"
 
-                renderer.encode(self._frames, tmp_video)
-                self._sound_timeline.save_wav(tmp_audio, total_seconds)
-                mux_audio_video(tmp_video, tmp_audio, output_path)
-                size = os.path.getsize(output_path) / 1024
-                print(f"  Output: {output_path} ({size:.1f} KB) [video+audio]")
+            scene_name = self.__class__.__name__
+            res_fps = f"{self.config.output_width}x{self.config.output_height}_{self.config.fps}fps"
+
+            base_dir = os.path.join("outputs", script_name)
+            video_dir = os.path.join(base_dir, res_fps)
+            audio_dir = os.path.join(base_dir, "audio")
+            script_dir = os.path.join(base_dir, "scripts")
+
+            os.makedirs(video_dir, exist_ok=True)
+            os.makedirs(audio_dir, exist_ok=True)
+            os.makedirs(script_dir, exist_ok=True)
+
+            output_path = os.path.join(video_dir, f"{scene_name}.mp4")
+            audio_path = os.path.join(audio_dir, f"{scene_name}.wav")
+
+            # Backup the script
+            if os.path.exists(script_path):
+                shutil.copy2(script_path, os.path.join(script_dir, os.path.basename(script_path)))
+        else:
+            # If an explicit path is given, we just use a temp dir for audio later
+            audio_path = None
+
+        if sound_count > 0:
+            if audio_path is None:
+                # Use temp directory for manual output_path
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmp_video = os.path.join(tmpdir, "video_only.mp4")
+                    tmp_audio = os.path.join(tmpdir, "audio.wav")
+                    renderer.encode(self._frames, tmp_video)
+                    self._sound_timeline.save_wav(tmp_audio, total_seconds)
+                    mux_audio_video(tmp_video, tmp_audio, output_path)
+            else:
+                # Use the organized directories
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmp_video = os.path.join(tmpdir, "video_only.mp4")
+                    renderer.encode(self._frames, tmp_video)
+                    self._sound_timeline.save_wav(audio_path, total_seconds)
+                    mux_audio_video(tmp_video, audio_path, output_path)
+            
+            size = os.path.getsize(output_path) / 1024
+            print(f"  Output: {output_path} ({size:.1f} KB) [video+audio]")
+            if audio_path:
+                print(f"  Audio:  {audio_path}")
         else:
             renderer.encode(self._frames, output_path)
+            size = os.path.getsize(output_path) / 1024
+            print(f"  Output: {output_path} ({size:.1f} KB) [video]")
 
         print(f"[PixelEngine] ✓ Video saved to: {output_path}")

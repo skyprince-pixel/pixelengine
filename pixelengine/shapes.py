@@ -31,9 +31,19 @@ class Rect(PObject):
         img = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         if self.filled:
-            draw.rectangle(
-                [0, 0, self.width - 1, self.height - 1], fill=color
-            )
+            if self.fill_texture is not None:
+                # Texture fill: pixel by pixel
+                for py in range(self.height):
+                    for px in range(self.width):
+                        tc = self.fill_texture.get_pixel(px, py)
+                        # Apply opacity
+                        tc = (*tc[:3], int(tc[3] * self.opacity))
+                        img.putpixel((px, py), tc)
+                self.fill_texture.advance_frame()
+            else:
+                draw.rectangle(
+                    [0, 0, self.width - 1, self.height - 1], fill=color
+                )
         else:
             for i in range(self.border_width):
                 draw.rectangle(
@@ -226,6 +236,7 @@ class Triangle(PObject):
         """Scanline fill algorithm for triangle."""
         pts = sorted(self.points, key=lambda p: p[1])
         (x0, y0), (x1, y1), (x2, y2) = pts
+        has_texture = self.fill_texture is not None
 
         def _interp_x(ya, xa, yb, xb, y):
             """Interpolate X for a given Y along an edge."""
@@ -235,17 +246,22 @@ class Triangle(PObject):
 
         for y in range(y0, y2 + 1):
             if y < y1:
-                # Upper half
                 xa = _interp_x(y0, x0, y2, x2, y)
                 xb = _interp_x(y0, x0, y1, x1, y)
             else:
-                # Lower half
                 xa = _interp_x(y0, x0, y2, x2, y)
                 xb = _interp_x(y1, x1, y2, x2, y)
             if xa > xb:
                 xa, xb = xb, xa
             for x in range(xa, xb + 1):
-                canvas.set_pixel(x, y, color)
+                if has_texture:
+                    tc = self.fill_texture.get_pixel(x, y)
+                    tc = (*tc[:3], int(tc[3] * self.opacity))
+                    canvas.set_pixel(x, y, tc)
+                else:
+                    canvas.set_pixel(x, y, color)
+        if has_texture:
+            self.fill_texture.advance_frame()
 
     @property
     def center_x(self) -> int:

@@ -10,7 +10,7 @@ All rendering is done via **Pillow** images encoded straight into **ffmpeg** wit
 
 1. **Python**: 3.8+ (Virtual Environment **highly** recommended)
 2. **Core Dependencies**: `Pillow`, `numpy`
-3. **Audio Dependencies**: `soundfile`, `kokoro-onnx` (for Voiceover TTS)
+3. **Audio Dependencies**: `soundfile`, `chatterbox-tts`, `torch`, `torchaudio` (for Voiceover TTS)
 4. **System Dep**: `ffmpeg` (must be accessible in PATH to mux final MP4s).
 
 ---
@@ -70,9 +70,70 @@ Available easings: `linear`, `ease_in`, `ease_out`, `ease_in_out`, `bounce`, `el
 
 ---
 
+## 3.1 Manim-like Construction Animations (v2)
+Build shapes gradually — inspired by Manim's Create/Transform pattern.
+
+- `GrowFromPoint(target, point_x, point_y)` — Object scales from 0 at a point to full size.
+- `GrowFromEdge(target, edge="bottom")` — Bar/rect extends from an edge (bottom, top, left, right). **Perfect for bar chart animations!**
+- `DrawBorderThenFill(target)` — First traces outline, then fills interior.
+- `Create(target)` — Progressive construction (sweep reveal).
+- `Uncreate(target)` — Reverse of Create.
+- `ShowPassingFlash(target)` — Highlight with a sweeping flash.
+- `GrowArrow(target)` — Line grows from start to end point.
+
+```python
+bar = Rect(20, 60, x=50, y=40, color="#00E436")
+scene.add(bar)
+scene.play(GrowFromEdge(bar, edge="bottom"), duration=1.0)
+```
+
+---
+
+## 3.2 Shape Morphing (v2)
+Transform one shape into another smoothly.
+
+- `MorphTo(source, target_shape)` — Interpolates position, color, size, and vertices.
+- `ReplacementTransform(source, target_obj)` — Source fades out, target fades in.
+- `TransformMatchingPoints(source, target)` — Morph polygon vertices by index.
+
+```python
+square = Rect(30, 30, x=50, y=50, color="#FF004D")
+scene.play(MorphTo(square, target_shape=Circle(15, x=150, y=50, color="#29ADFF")),
+           duration=1.5)
+```
+
+---
+
+## 3.3 Math Objects (v2)
+Educational primitives for data visualization.
+
+- `NumberLine(min_val, max_val, step, x, y, width)` — Number line with ticks and labels.
+- `BarChart(data, labels, colors, x, y, width, height)` — Animated bar chart.
+- `Axes(x_range, y_range, x, y, width, height)` — 2D coordinate axes.
+- `Graph(func, axes, color)` — Plot function with `graph.animate_draw()`.
+- `Dot(x, y, radius, color)` — Point marker.
+- `ValueTracker(value)` — Track animatable values for reactive animations.
+
+```python
+chart = BarChart(data=[30, 70, 50, 90], colors=["#FF004D", "#00E436", "#29ADFF", "#FFEC27"],
+                 x=30, y=20, width=200, height=100)
+scene.add(chart)
+scene.play(chart.animate_build(), duration=2.0)
+```
+
+**ValueTracker + Updaters**:
+```python
+tracker = ValueTracker(0)
+bar = Rect(10, 50, x=100, y=60, color="#FF004D")
+bar.add_updater(lambda obj, dt: setattr(obj, 'height', max(1, int(50 * tracker.value / 100))))
+scene.add(bar)
+scene.play(tracker.animate_to(100), duration=2.0)
+```
+
+---
+
 ## 4. Sprites
 The `Sprite` system runs off an ASCII matrix array, letting you define 8-bit characters dynamically without `.png` files!
-The engine maps pixel character data against the standard Picol-8 / NES color maps.
 
 ```python
 player = Sprite.from_art([
@@ -133,31 +194,128 @@ Sounds require NO actual MP3/WAV uploads. They are procedurally sine/square/tria
 
 ### Auto Sounds
 `Scene` has auto-sounds enabled natively (`self.auto_sound = True`).
-- A `TypeWriter` text prints typing ticks.
-- A `FadeIn` makes a shimmer noise.
-- A `FadeTransition` adds a whoosh noise.
 
 ### Manual Event Cues
 ```python
 from pixelengine import SoundFX
 self.play_sound(SoundFX.coin())
 self.play_sound(SoundFX.explosion())
-self.play_sound(SoundFX.jump())
-self.play_sound(SoundFX.powerup())
-self.play_sound(SoundFX.correct()) # Learning app cues
 ```
 
-### VoiceOver (Kokoro TTS)
-Perfectly timed, synchronized TTS using the `Kokoro-ONNX` runtime.
-
+### VoiceOver (Chatterbox Turbo TTS)
 ```python
-# Generates audio, syncs timeline, holds Scene frame execution!
+# Default voice (no reference clip needed)
 self.play_voiceover(
-    "Hello! I'm Adam, the AI teacher. Here is math trick #1.", 
-    voice="am_adam"
+    "Hello! I'm your AI teacher. Here is math trick number one."
+)
+
+# With voice cloning (provide a ~10s reference .wav)
+self.play_voiceover(
+    "Hello! [chuckle] Let me show you something amazing.",
+    voice="path/to/reference_clip.wav"
 )
 ```
-You don't need `duration=` or manual `self.wait()`. The engine measures the length of the speech exactly!
+
+---
+
+## 9. Texture System (v2)
+Fill shapes with pixel-art-friendly patterns instead of flat colors.
+
+**Built-in patterns**: `checkerboard`, `stripes_h`, `stripes_v`, `diagonal`, `dots`, `crosshatch`, `brick`, `herringbone`.
+
+```python
+from pixelengine import PatternTexture, DitherTexture, GradientTexture
+
+rect = Rect(60, 40, x=50, y=30, color="#FFFFFF")
+rect.fill_texture = PatternTexture("checkerboard", cell_size=4,
+                                    color1="#FF004D", color2="#1D2B53")
+scene.add(rect)
+```
+
+- `DitherTexture(color1, color2, density)` — Bayer-matrix ordered dithering.
+- `NoiseTexture(colors, scale)` — Hash-based noise mapped to palette.
+- `GradientTexture(color1, color2, direction)` — Linear gradient fill.
+- `AnimatedTexture(textures, fps)` — Cycles between textures.
+- `ScrollingTexture(texture, dx, dy)` — Texture scrolls over time.
+
+---
+
+## 10. Pseudo-3D Rendering (v2)
+Wireframe 3D shapes projected onto the 2D pixel canvas. Perfect for geometry education.
+
+```python
+from pixelengine import Cube3D, Vec3
+from pixelengine.objects3d import Rotate3D
+
+cube = Cube3D(size=2.0, color="#29ADFF")
+cube.position = Vec3(0, 0, 5)
+scene.add(cube)
+scene.play(Rotate3D(cube, axis="y", degrees=360), duration=3.0)
+```
+
+**3D Primitives**: `Cube3D`, `Sphere3D`, `Pyramid3D`, `Cylinder3D`, `Mesh3D`, `Axes3D`.
+**Projections**: `perspective` (default) or `isometric`.
+**Camera**: `Camera3D(fov, distance, elevation, azimuth)`, `IsoCamera(scale)`.
+**Animations**: `Rotate3D(obj, axis, degrees)`, `Orbit3D(camera, degrees)`, `Zoom3D(camera, target_distance)`.
+
+---
+
+## 11. Simulation Engine (v2)
+Physics simulations rendered as video — gravity, collisions, pendulums, springs, orbits.
+
+### Self-contained Simulations
+```python
+from pixelengine import Pendulum, Spring, Rope, OrbitalSystem, FluidParticles
+
+pend = Pendulum(pivot_x=128, pivot_y=30, length=60, angle=45, color="#FF004D")
+scene.add(pend)
+scene.wait(5)  # Physics auto-advances during render
+```
+
+### Physics World (Custom)
+```python
+from pixelengine import PhysicsWorld, PhysicsBody, Circle
+
+physics = PhysicsWorld(gravity_y=100)
+physics.bounds = (0, 0, 256, 144)
+scene.physics = physics  # Auto-stepped each frame
+
+ball = Circle(5, x=128, y=20, color="#FF004D")
+body = PhysicsBody(ball, mass=1.0, restitution=0.8)
+physics.add_body(body)
+scene.add(ball)
+scene.wait(5)
+```
+
+**Simulations**: `Pendulum`, `Spring`, `OrbitalSystem` (N-body gravity), `Rope` (Verlet chain), `FluidParticles` (SPH-like).
+**Physics**: `PhysicsBody`, `PhysicsWorld`, `StaticBody`, `Bounds`, `CollisionCallback`.
+
+---
+
+## 12. Outputs & File Organization
+
+By default, PixelEngine now automatically organizes generated scripts, audio, and videos into an `outputs/` folder. It uses the name of the python script you run as the project name.
+
+For example, if you run a script named `my_video.py`, PixelEngine will generate:
+```
+outputs/
+└── my_video/
+    ├── 1024x576_12fps/
+    │   └── MyScene.mp4     # The final rendered video
+    ├── audio/
+    │   └── MyScene.wav     # The isolated audio track
+    └── scripts/
+        └── my_video.py     # A backup copy of the script state for reference
+```
+
+To use this feature, simply call `scene.render()` with no arguments.
+
+```python
+if __name__ == "__main__":
+    scene = MyScene(PixelConfig.landscape())
+    scene.render()  # Auto-organizes to outputs/my_video/
+```
+*(If you pass an explicit path like `scene.render("video.mp4")`, it will bypass organization and output directly to that path).*
 
 ---
 <br>
@@ -173,20 +331,26 @@ You don't need `duration=` or manual `self.wait()`. The engine measures the leng
    from pixelengine import (
        Scene, PixelConfig, CameraZoom, Rect, Circle, Sprite,
        MoveTo, FadeIn, Sequence, ease_out, PixelText, TypeWriter,
-       SoundFX, Grid, ParticleEmitter, TileMap, TileSet
+       SoundFX, Grid, ParticleEmitter, TileMap, TileSet,
+       # v2 Manim-like
+       GrowFromPoint, GrowFromEdge, DrawBorderThenFill, Create,
+       MorphTo, ValueTracker, NumberLine, BarChart, Axes, Graph,
+       # v2 Textures
+       PatternTexture, DitherTexture, GradientTexture,
+       # v2 3D (also from pixelengine.objects3d for Rotate3D)
+       Cube3D, Sphere3D, Vec3,
+       # v2 Simulations
+       Pendulum, Spring, Rope, PhysicsWorld, PhysicsBody,
    )
    ```
-5. **No File dependencies**: Do **not** try to load `.png`, `.wav`, or `.json` to make scenes. Utilize ASCII Sprite generation (`Sprite.from_art()`), raw math logic strings, TileMaps (`TileSet.add_color_tile()`), and `SoundFX.coin()`. Rely on the procedurally generated assets 100% of the time to maintain absolute hermetic execution. 
-6. **VoiceOver Speed / Blockers**: Utilizing `self.play_voiceover` is blocking logic. It intrinsically waits for the dialogue to finish. Do **not** write `self.play(MoveTo(...))` *below* a `play_voiceover` sequentially if you want them to happen together!
-   Instead, if you want an animation running *WHILE* speaking, do it like this:
+5. **No File dependencies**: Do **not** try to load `.png`, `.wav`, or `.json`. Use procedural generation.
+6. **VoiceOver** is blocking. Uses Chatterbox Turbo TTS (auto-detects MPS/CPU). For simultaneous animation + speech, generate manually:
    ```python
-   # Correct!
    from pixelengine.voiceover import VoiceOver
-   
-   # 1. Generate VoiceOver Object manually natively
    speech_sfx, speech_dur = VoiceOver.generate("Look at me move!")
-   
-   # 2. Play motion *alongside* sound timeline cue, using EXACT dynamic length
    self.play(MoveTo(character, x=200), duration=speech_dur, sound=speech_sfx)
    ```
-7. **Educational Context**: Make extensive use of `Grid(cell_size=16)`, `Outline()`, `TypeWriter`, and `SoundFX.correct()` / `SoundFX.incorrect()` when generating visual Math/Science tutorial scenarios per user prompts.
+   Supports paralinguistic tags: `[laugh]`, `[chuckle]`, `[cough]` for natural realism.
+7. **Textures**: Set `shape.fill_texture = PatternTexture(...)` before adding to scene.
+8. **3D Objects**: Position in 3D via `obj.position = Vec3(x, y, z)` and set `obj.rotation_x/y/z` for rotation. Use `Rotate3D` animation for smooth rotation.
+9. **Simulations**: Self-contained objects like `Pendulum` and `Rope` auto-advance physics during `self.wait()`. For custom physics, create a `PhysicsWorld` and assign to `scene.physics`.

@@ -162,7 +162,7 @@ class ParticleEmitter(PObject):
 
         # Update and draw particles
         alive = []
-        dt = 1.0 / 12
+        dt = 1.0 / 12  # Approximate frame time at default FPS
         for p in self._particles:
             p.life -= dt
             if p.life <= 0:
@@ -360,7 +360,8 @@ class FadeTransition:
 
         self._overlay.opacity = opacity
 
-        if alpha >= 1.0 and self.mode == "in":
+        # Clean up overlay when transition completes
+        if alpha >= 1.0:
             self.scene.remove(self._overlay)
             self._overlay = None
 
@@ -453,13 +454,19 @@ class IrisTransition(PObject):
         if not self.visible:
             return
         r = getattr(self, '_radius', self.max_radius)
-        # Draw solid color everywhere EXCEPT inside the iris circle
-        for py in range(canvas.height):
-            for px in range(canvas.width):
-                dx = px - self.cx
-                dy = py - self.cy
-                if dx * dx + dy * dy > r * r:
-                    canvas.set_pixel(px, py, self.iris_color)
+        # Use PIL to draw the iris mask efficiently
+        w, h = canvas.width, canvas.height
+        mask = Image.new("RGBA", (w, h), self.iris_color)
+        # Cut out the iris circle by drawing a transparent ellipse
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(mask)
+        cx, cy = self.cx, self.cy
+        if r > 0:
+            draw.ellipse(
+                [cx - r, cy - r, cx + r, cy + r],
+                fill=(0, 0, 0, 0),
+            )
+        canvas.blit(mask, 0, 0)
 
 
 class DissolveTransition:
@@ -612,9 +619,9 @@ class ScreenFlash(PObject):
         t = self._timer / self.duration
         alpha = int(255 * (1.0 - t))
         color = (*self.color[:3], alpha)
-        for y in range(canvas.height):
-            for x in range(canvas.width):
-                canvas.set_pixel(x, y, color)
+        # Use PIL image blit instead of pixel-by-pixel
+        overlay = Image.new("RGBA", (canvas.width, canvas.height), color)
+        canvas.blit(overlay, 0, 0)
 
 
 class Outline(PObject):
@@ -642,20 +649,16 @@ class Outline(PObject):
         if not self.visible or self.width <= 0 or self.height <= 0:
             return
         color = self.get_render_color()
-        ox, oy = int(self.x), int(self.y)
+        # Use PIL ImageDraw for efficient border rendering
+        img = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
         for t in range(self.thickness):
-            # Top edge
-            for x in range(self.width):
-                canvas.set_pixel(ox + x, oy + t, color)
-            # Bottom edge
-            for x in range(self.width):
-                canvas.set_pixel(ox + x, oy + self.height - 1 - t, color)
-            # Left edge
-            for y in range(self.height):
-                canvas.set_pixel(ox + t, oy + y, color)
-            # Right edge
-            for y in range(self.height):
-                canvas.set_pixel(ox + self.width - 1 - t, oy + y, color)
+            draw.rectangle(
+                [t, t, self.width - 1 - t, self.height - 1 - t],
+                outline=color,
+            )
+        canvas.blit(img, int(self.x), int(self.y))
 
 
 class Grid(PObject):

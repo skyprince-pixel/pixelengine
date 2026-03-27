@@ -1,104 +1,125 @@
-"""PixelEngine VoiceOver — AI Text-to-Speech using Kokoro.
+"""PixelEngine VoiceOver — AI Text-to-Speech using Chatterbox Turbo.
 
-This module provides high-quality TTS using the Kokoro ONNX model.
-It auto-downloads the required models on first use.
+This module provides high-quality TTS using Resemble AI's Chatterbox Turbo model.
+Models are auto-downloaded from HuggingFace on first use (~1.5 GB).
 
 Usage::
 
-    # Generate speech
-    audio, duration = VoiceOver.generate("Welcome to PixelEngine!", voice="af_bella")
+    # Generate speech (default voice)
+    audio, duration = VoiceOver.generate("Welcome to PixelEngine!")
+
+    # Generate speech with voice cloning (provide a ~10s reference .wav)
+    audio, duration = VoiceOver.generate("Welcome!", voice="ref_clip.wav")
 
     # In a Scene
-    self.play_voiceover("Welcome to PixelEngine!", voice="af_bella")
+    self.play_voiceover("Welcome to PixelEngine!")
 """
 import os
-import urllib.request
 import numpy as np
+import torch
 
-# Lazy load Kokoro to avoid slow imports if unused
-_kokoro_instance = None
-_sample_rate = 22050  # Kokoro models generally output 22050 or 24000
-                      # kokoro-onnx outputs 24000 actually. We'll resample if needed.
-
-# We will store models in ~/.cache/pixelengine/kokoro
-CACHE_DIR = os.path.expanduser("~/.cache/pixelengine/kokoro")
-ONNX_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx"
-VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin"
-ONNX_FILE = os.path.join(CACHE_DIR, "kokoro-v0_19.onnx")
-VOICES_FILE = os.path.join(CACHE_DIR, "voices.bin")
+# Lazy-load model to avoid slow imports if unused
+_model_instance = None
+_model_sr = None  # Sample rate from the model
 
 
-def _download_file(url: str, dest: str):
-    """Download a file with a simple progress print."""
-    if os.path.exists(dest):
-        return
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
-    print(f"[VoiceOver] Downloading {os.path.basename(dest)}...")
-    try:
-        urllib.request.urlretrieve(url, dest)
-        print(f"[VoiceOver] Download complete: {dest}")
-    except Exception as e:
-        if os.path.exists(dest):
-            os.remove(dest)
-        raise RuntimeError(f"Failed to download {url}: {e}")
+def _get_device() -> str:
+    """Auto-detect best available device: mps (Apple Silicon) > cpu."""
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
 
 
-def _get_kokoro():
-    """Get or initialize the Kokoro instance."""
-    global _kokoro_instance, _sample_rate
-    if _kokoro_instance is not None:
-        return _kokoro_instance
-
-    _download_file(ONNX_URL, ONNX_FILE)
-    _download_file(VOICES_URL, VOICES_FILE)
+def _get_chatterbox():
+    """Get or initialize the Chatterbox Turbo model."""
+    global _model_instance, _model_sr
+    if _model_instance is not None:
+        return _model_instance
 
     try:
-        from kokoro_onnx import Kokoro
-        _kokoro_instance = Kokoro(ONNX_FILE, VOICES_FILE)
-        return _kokoro_instance
+        from chatterbox.tts_turbo import ChatterboxTurboTTS, REPO_ID
+        from huggingface_hub import snapshot_download
     except ImportError:
         raise ImportError(
-            "kokoro-onnx is not installed. Run: pip install kokoro-onnx soundfile"
+            "chatterbox-tts is not installed. Run: pip install chatterbox-tts"
         )
+
+    device = _get_device()
+    print(f"[VoiceOver] Downloading/Loading Chatterbox Turbo on device: {device}")
+    
+    # ChatterboxTurboTTS.from_pretrained hardcodes token=True, which requires an HF login.
+    # The repo is public, so we download it directly without a token.
+    local_path = snapshot_download(
+        repo_id=REPO_ID,
+        token=False,  # Bypass HF login requirement
+        allow_patterns=["*.safetensors", "*.json", "*.txt", "*.pt", "*.model"]
+    )
+    
+    _model_instance = ChatterboxTurboTTS.from_local(local_path, device=device)
+    _model_sr = _model_instance.sr
+    print(f"[VoiceOver] Model loaded (sample rate: {_model_sr})")
+    return _model_instance
 
 
 class VoiceOver:
-    """Generates synthetic speech using Kokoro."""
+    """Generates synthetic speech using Chatterbox Turbo."""
 
     @classmethod
-    def generate(cls, text: str, voice: str = "af_bella", speed: float = 1.0) -> tuple:
+    def generate(cls, text: str, voice: str = None, speed: float = 1.0) -> tuple:
         """Generate speech from text.
 
-        Available voices: af_bella, af_sarah, am_adam, am_michael,
-                          bf_emma, bm_george, etc. (Default: af_bella)
-
         Args:
-            text: The text to speak.
-            voice: Voice name.
-            speed: Speech speed (default 1.0).
+            text: The text to speak. Supports paralinguistic tags:
+                  [laugh], [chuckle], [cough] for natural realism.
+            voice: Optional path to a ~10s reference .wav file for voice
+                   cloning. If None, uses the model's default voice.
+            speed: Speech speed multiplier (default 1.0). Values < 1.0 are
+                   slower, > 1.0 are faster.
 
         Returns:
             Tuple of (SoundFX, duration_in_seconds)
         """
-        k = _get_kokoro()
-        
-        # kokoro-onnx create() returns (samples, sample_rate)
-        # samples is a flat float32 numpy array
-        samples, sr = k.create(text, voice=voice, speed=speed, lang="en-us")
-        
-        from pixelengine.sound import SoundFX, SAMPLE_RATE
-        
-        # If Kokoro's sample rate doesn't match ours (it's usually 24000 vs 22050),
-        # we need to do a simple linear pitch/resample or just change the SoundFX sr.
-        # Actually, SoundFX assumes pixelengine.sound.SAMPLE_RATE (22050).
-        # We can perform a basic nearest-neighbor or linear resample to 22050.
-        if sr != SAMPLE_RATE:
-            duration = len(samples) / sr
-            target_len = int(duration * SAMPLE_RATE)
-            indices = np.linspace(0, len(samples) - 1, target_len).astype(int)
-            resampled = samples[indices]
-            sfx = SoundFX(resampled, name=f"voiceover_{voice}")
+        model = _get_chatterbox()
+
+        # Generate audio — returns a torch tensor [1, num_samples]
+        if voice is None:
+            default_voice = os.path.join(os.path.dirname(__file__), "default_male.wav")
+            if os.path.isfile(default_voice):
+                voice = default_voice
+
+        if voice and os.path.isfile(voice):
+            wav = model.generate(text, audio_prompt_path=voice)
         else:
-            sfx = SoundFX(samples, name=f"voiceover_{voice}")
-            
+            wav = model.generate(text)
+
+        # Convert torch tensor to numpy float32
+        samples = wav.squeeze().cpu().numpy().astype(np.float32)
+
+        # Normalize to [-1, 1] range
+        peak = np.max(np.abs(samples))
+        if peak > 0:
+            samples = samples / peak
+
+        # Apply speed adjustment via resampling
+        if speed != 1.0 and speed > 0:
+            original_len = len(samples)
+            target_len = int(original_len / speed)
+            if target_len > 0:
+                indices = np.linspace(0, original_len - 1, target_len).astype(int)
+                samples = samples[indices]
+
+        from pixelengine.sound import SoundFX, SAMPLE_RATE
+
+        # Resample from model's native rate to PixelEngine's SAMPLE_RATE (22050)
+        model_sr = _model_sr or 24000
+        if model_sr != SAMPLE_RATE:
+            duration = len(samples) / model_sr
+            target_len = int(duration * SAMPLE_RATE)
+            if target_len > 0:
+                indices = np.linspace(0, len(samples) - 1, target_len).astype(int)
+                samples = samples[indices]
+
+        sfx = SoundFX(samples, name="voiceover_chatterbox")
         return sfx, sfx.duration

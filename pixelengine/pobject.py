@@ -18,7 +18,9 @@ class PObject:
         self.visible: bool = True
         self.scale_x: float = 1.0
         self.scale_y: float = 1.0
+        self.fill_texture = None         # Texture object for patterned fills
         self._children: list = []
+        self._updaters: list = []        # Per-frame update callbacks: fn(obj, dt)
 
     # ── Position ────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 """PixelEngine — A code-first pixel art animation engine."""
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -40,6 +40,34 @@ from pixelengine.animation import (
     elastic,
 )
 
+# ── Construction Animations (Manim-like) ───────────────────
+from pixelengine.construction import (
+    GrowFromPoint,
+    GrowFromEdge,
+    DrawBorderThenFill,
+    Create,
+    Uncreate,
+    ShowPassingFlash,
+    GrowArrow,
+)
+
+# ── Transform Animations ───────────────────────────────────
+from pixelengine.transform import (
+    MorphTo,
+    ReplacementTransform,
+    TransformMatchingPoints,
+)
+
+# ── Math Objects ────────────────────────────────────────────
+from pixelengine.mathobjects import (
+    ValueTracker,
+    NumberLine,
+    BarChart,
+    Axes,
+    Graph,
+    Dot,
+)
+
 # ── Text ────────────────────────────────────────────────────
 from pixelengine.text import PixelText, TypeWriter
 
@@ -73,6 +101,45 @@ from pixelengine.effects import (
 # ── TileMap ─────────────────────────────────────────────────
 from pixelengine.tilemap import TileSet, TileMap
 
+# ── Texture System ─────────────────────────────────────────
+from pixelengine.texture import (
+    Texture,
+    PatternTexture,
+    DitherTexture,
+    NoiseTexture,
+    GradientTexture,
+    AnimatedTexture,
+    ScrollingTexture,
+)
+
+# ── 3D System ──────────────────────────────────────────────
+from pixelengine.math3d import Vec3, Mat4
+from pixelengine.objects3d import (
+    Object3D,
+    Cube3D,
+    Sphere3D,
+    Pyramid3D,
+    Cylinder3D,
+    Mesh3D,
+    Axes3D,
+)
+from pixelengine.camera3d import Camera3D, IsoCamera, Orbit3D, Zoom3D
+
+# ── Physics / Simulation ──────────────────────────────────
+from pixelengine.physics import PhysicsBody, PhysicsWorld
+from pixelengine.collision import (
+    CollisionCallback,
+    StaticBody,
+    Bounds,
+)
+from pixelengine.simulations import (
+    Pendulum,
+    Spring,
+    OrbitalSystem,
+    Rope,
+    FluidParticles,
+)
+
 # ── Sound ───────────────────────────────────────────────────
 from pixelengine.sound import SoundFX, SoundTimeline
 from pixelengine.voiceover import VoiceOver
@@ -93,6 +160,13 @@ __all__ = [
     # Easing
     "linear", "ease_in", "ease_out", "ease_in_out",
     "bounce", "elastic",
+    # Construction (Manim-like)
+    "GrowFromPoint", "GrowFromEdge", "DrawBorderThenFill",
+    "Create", "Uncreate", "ShowPassingFlash", "GrowArrow",
+    # Transform
+    "MorphTo", "ReplacementTransform", "TransformMatchingPoints",
+    # Math Objects
+    "ValueTracker", "NumberLine", "BarChart", "Axes", "Graph", "Dot",
     # Text
     "PixelText", "TypeWriter",
     # Sprite
@@ -107,6 +181,17 @@ __all__ = [
     "Trail", "ScreenFlash", "Outline", "Grid",
     # TileMap
     "TileSet", "TileMap",
+    # Texture
+    "Texture", "PatternTexture", "DitherTexture", "NoiseTexture",
+    "GradientTexture", "AnimatedTexture", "ScrollingTexture",
+    # 3D
+    "Vec3", "Mat4", "Object3D", "Cube3D", "Sphere3D", "Pyramid3D",
+    "Cylinder3D", "Mesh3D", "Axes3D",
+    "Camera3D", "IsoCamera", "Orbit3D", "Zoom3D",
+    # Physics / Simulation
+    "PhysicsBody", "PhysicsWorld",
+    "CollisionCallback", "StaticBody", "Bounds",
+    "Pendulum", "Spring", "OrbitalSystem", "Rope", "FluidParticles",
     # Sound
     "SoundFX", "SoundTimeline", "VoiceOver",
     # Color

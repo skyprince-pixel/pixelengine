@@ -1,4 +1,37 @@
+# Generated media
 *.mp4
+*.wav
+*.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
 .venv/
+.venv_*/
 __pycache__/
 *.egg-info/
+dist/
+build/
+*.pyc
+*.pyo
+
+# Secrets & tokens — NEVER commit these
+token.json
+client_secret*.json
+voices.json
+
+# Outputs
+outputs/
+
+# IDE / Planning
+.planning/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Audio temp files
+full_audio.wav
+scene_*.wav

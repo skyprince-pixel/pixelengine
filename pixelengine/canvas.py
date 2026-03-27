@@ -18,7 +18,10 @@ class Canvas:
 
     def clear(self):
         """Clear the canvas to the background color."""
-        self._image = Image.new("RGBA", (self.width, self.height), self.background)
+        # Reuse the existing image buffer instead of allocating a new one
+        if not hasattr(self, '_bg_image'):
+            self._bg_image = Image.new("RGBA", (self.width, self.height), self.background)
+        self._image.paste(self._bg_image)
 
     def set_pixel(self, x: int, y: int, color: tuple):
         """Set a single pixel. Silently ignores out-of-bounds coordinates."""

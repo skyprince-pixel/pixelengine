@@ -1,4 +1,5 @@
 """PixelEngine backgrounds — solid, gradient, starfield, and parallax layers."""
+import math
 import random
 from PIL import Image, ImageDraw
 from pixelengine.pobject import PObject
@@ -55,6 +56,14 @@ class GradientBackground(PObject):
     def render(self, canvas):
         if not self.visible:
             return
+
+        # Cache the gradient image — it never changes
+        cache_key = (canvas.width, canvas.height, self.direction,
+                     self.color_top, self.color_bottom)
+        if getattr(self, '_cache_key', None) == cache_key and self._cached_img is not None:
+            canvas.blit(self._cached_img, 0, 0)
+            return
+
         img = Image.new("RGBA", (canvas.width, canvas.height))
 
         if self.direction == "vertical":
@@ -70,6 +79,8 @@ class GradientBackground(PObject):
                 for y in range(canvas.height):
                     img.putpixel((x, y), color)
 
+        self._cached_img = img
+        self._cache_key = cache_key
         canvas.blit(img, 0, 0)
 
     @staticmethod
@@ -136,7 +147,6 @@ class Starfield(PObject):
             # Twinkle: some stars periodically dim
             if self.twinkle:
                 cycle = (self._frame_counter * 0.05 + phase * 6.28) % 6.28
-                import math
                 is_bright = math.sin(cycle) > 0.3
             else:
                 is_bright = True

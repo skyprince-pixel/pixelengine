@@ -1,3 +1,56 @@
 [build-system]
 requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "pixelengine"
+version = "0.2.0"
+description = "A code-first pixel art animation engine for educational videos"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Akash Kumar Nayak"},
+]
+keywords = ["pixel-art", "animation", "video", "educational", "retro", "8-bit"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Education",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+]
+
+dependencies = [
+    "Pillow>=10.0.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+voiceover = [
+    "chatterbox-tts",
+    "torch",
+    "huggingface-hub",
+]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.urls]
+Homepage = "https://github.com/akashkumarnayak/pixelengine"
+Repository = "https://github.com/akashkumarnayak/pixelengine"
+Issues = "https://github.com/akashkumarnayak/pixelengine/issues"
+
+[tool.setuptools.packages.find]
+include = ["pixelengine*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
