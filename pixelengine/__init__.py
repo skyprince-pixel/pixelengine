@@ -1,5 +1,5 @@
 """PixelEngine — A code-first pixel art animation engine."""
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig

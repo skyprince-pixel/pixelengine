@@ -247,7 +247,7 @@ base_y = 5 + 30  # y + height
 has_label_pixels = False
 for y in range(base_y + 2, base_y + 10):
     for x in range(80):
-        px = canvas._image.getpixel((x, y))
+        px = canvas._pil_image.getpixel((x, y))
         if px[3] > 0 and px != canvas.background:
             has_label_pixels = True
             break

@@ -3,6 +3,16 @@ from setuptools import setup, find_packages
 
 setup(
     name="pixelengine",
-    version="0.3.0",
+    version="0.5.0",
     packages=find_packages(include=["pixelengine*"]),
+    install_requires=[
+        "Pillow",
+        "numpy",
+    ],
+    extras_require={
+        "perf": ["av", "pymunk", "pydub"],
+        "av": ["av"],
+        "physics": ["pymunk"],
+        "audio": ["pydub"],
+    },
 )

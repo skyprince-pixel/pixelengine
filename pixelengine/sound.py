@@ -2,7 +2,11 @@
 
 All sounds are generated purely from math (sine, square, noise, etc.)
 using NumPy. No external audio files needed. Sounds are mixed into a
-timeline and muxed into the final MP4 via ffmpeg.
+timeline and muxed into the final MP4 via ffmpeg or PyAV.
+
+Optional enhancements:
+- **Pydub**: Better audio mixing with `.overlay()` and normalization.
+- **PyAV**: In-memory audio/video muxing (no temp files).
 
 Usage::
 
@@ -20,6 +24,20 @@ import os
 import subprocess
 import tempfile
 import numpy as np
+
+# Optional: Pydub for advanced audio mixing
+try:
+    from pydub import AudioSegment
+    HAS_PYDUB = True
+except ImportError:
+    HAS_PYDUB = False
+
+# Optional: PyAV for in-memory audio/video muxing
+try:
+    import av
+    HAS_PYAV = True
+except ImportError:
+    HAS_PYAV = False
 
 
 SAMPLE_RATE = 48000  # High-quality audio (48kHz CD-quality)
@@ -394,12 +412,57 @@ class SoundTimeline:
     def mix(self, total_duration: float) -> np.ndarray:
         """Mix all sound events into a single audio timeline.
 
+        Uses Pydub when available for professional audio mixing with
+        automatic normalization. Falls back to numpy mixing.
+
         Args:
             total_duration: Total video duration in seconds.
 
         Returns:
             Float32 numpy array of mixed audio samples.
         """
+        if HAS_PYDUB:
+            return self._mix_pydub(total_duration)
+        return self._mix_numpy(total_duration)
+
+    def _mix_pydub(self, total_duration: float) -> np.ndarray:
+        """Mix using Pydub for higher quality audio processing."""
+        total_ms = int(total_duration * 1000)
+        if total_ms <= 0:
+            return np.array([], dtype=np.float32)
+
+        # Create silent base track
+        base = AudioSegment.silent(duration=total_ms, frame_rate=SAMPLE_RATE)
+
+        for time_s, sfx in self._events:
+            position_ms = int(time_s * 1000)
+            if position_ms >= total_ms:
+                continue
+
+            # Convert numpy samples to Pydub AudioSegment
+            pcm_16 = (sfx.samples * 32767).astype(np.int16)
+            segment = AudioSegment(
+                pcm_16.tobytes(),
+                frame_rate=SAMPLE_RATE,
+                sample_width=2,
+                channels=1,
+            )
+
+            # Lower SFX volume, keep voiceovers normal
+            if not sfx.name.startswith("voiceover_"):
+                segment = segment - 6  # -6 dB (~50% volume)
+
+            base = base.overlay(segment, position=position_ms)
+
+        # Normalize to prevent clipping
+        base = base.normalize()
+
+        # Convert back to numpy float32
+        raw = np.frombuffer(base.raw_data, dtype=np.int16)
+        return raw.astype(np.float32) / 32767.0
+
+    def _mix_numpy(self, total_duration: float) -> np.ndarray:
+        """Fallback: mix using numpy array operations."""
         total_samples = int(total_duration * SAMPLE_RATE)
         if total_samples <= 0:
             return np.array([], dtype=np.float32)
@@ -415,12 +478,12 @@ class SoundTimeline:
                 continue
             end_idx = min(end_idx, total_samples)
             src_len = end_idx - start_idx
-            
+
             # Lower default SFX volume by 50%, keep voiceovers normal
             sfx_samples = sfx.samples
             if not sfx.name.startswith("voiceover_"):
                 sfx_samples = sfx.samples * 0.5
-                
+
             mix_buf[start_idx:end_idx] += sfx_samples[:src_len]
 
         # Clamp
@@ -460,13 +523,62 @@ class SoundTimeline:
 
 def mux_audio_video(video_path: str, audio_wav_path: str,
                     output_path: str):
-    """Combine a video file with an audio WAV file using ffmpeg.
+    """Combine a video file with an audio WAV file.
+
+    Uses PyAV when available for in-memory muxing.
+    Falls back to ffmpeg subprocess otherwise.
 
     Args:
         video_path: Path to the video-only MP4.
         audio_wav_path: Path to the WAV audio file.
         output_path: Path for the final MP4 with audio.
     """
+    if HAS_PYAV:
+        _mux_pyav(video_path, audio_wav_path, output_path)
+    else:
+        _mux_ffmpeg(video_path, audio_wav_path, output_path)
+
+
+def _mux_pyav(video_path: str, audio_wav_path: str, output_path: str):
+    """Mux video and audio using PyAV (in-memory FFmpeg)."""
+    try:
+        video_in = av.open(video_path)
+        audio_in = av.open(audio_wav_path)
+
+        output = av.open(output_path, 'w')
+
+        # Add streams
+        video_stream = output.add_stream(template=video_in.streams.video[0])
+        audio_stream = output.add_stream('aac', rate=SAMPLE_RATE)
+        audio_stream.bit_rate = 256000
+
+        # Copy video packets
+        for packet in video_in.demux(video_in.streams.video[0]):
+            if packet.dts is None:
+                continue
+            packet.stream = video_stream
+            output.mux(packet)
+
+        # Encode audio
+        for frame in audio_in.decode(audio=0):
+            frame.pts = None
+            for packet in audio_stream.encode(frame):
+                output.mux(packet)
+
+        # Flush audio
+        for packet in audio_stream.encode():
+            output.mux(packet)
+
+        output.close()
+        video_in.close()
+        audio_in.close()
+    except Exception as e:
+        print(f"[PixelEngine] PyAV mux failed, falling back to ffmpeg: {e}")
+        _mux_ffmpeg(video_path, audio_wav_path, output_path)
+
+
+def _mux_ffmpeg(video_path: str, audio_wav_path: str, output_path: str):
+    """Fallback: mux video and audio using ffmpeg subprocess."""
     cmd = [
         "ffmpeg", "-y",
         "-i", video_path,

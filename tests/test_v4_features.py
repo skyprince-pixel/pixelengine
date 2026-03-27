@@ -453,7 +453,7 @@ v4_symbols = [
 for sym in v4_symbols:
     test(f"import {sym}", hasattr(pixelengine, sym), f"missing from pixelengine")
 
-test("Version is 0.4.0", pixelengine.__version__ == "0.4.0",
+test("Version is 0.5.0", pixelengine.__version__ == "0.5.0",
      f"version={pixelengine.__version__}")
 
 

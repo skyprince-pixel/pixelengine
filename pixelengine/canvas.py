@@ -1,4 +1,9 @@
-"""PixelEngine canvas — the low-res pixel art rendering surface."""
+"""PixelEngine canvas — the low-res pixel art rendering surface.
+
+Uses a numpy array internally for fast pixel operations, with Pillow
+for final image output and upscaling.
+"""
+import numpy as np
 from PIL import Image
 from pixelengine.color import parse_color
 
@@ -6,33 +11,61 @@ from pixelengine.color import parse_color
 class Canvas:
     """Low-resolution RGBA rendering surface.
 
-    All drawing happens at the pixel art resolution (e.g. 256×144).
+    All drawing happens at the pixel art resolution (e.g. 480×270).
     The canvas is then upscaled with nearest-neighbor for final output.
+
+    Internally uses a numpy (H, W, 4) uint8 array for fast pixel operations.
     """
 
     def __init__(self, width: int, height: int, background: str = "#000000"):
         self.width = width
         self.height = height
         self.background = parse_color(background)
-        self._image = Image.new("RGBA", (width, height), self.background)
+        # Primary buffer: numpy (H, W, 4) uint8 array
+        self._pixels = np.zeros((height, width, 4), dtype=np.uint8)
+        self._bg_array = np.zeros((height, width, 4), dtype=np.uint8)
+        self._bg_array[:, :] = self.background
+        self._pixels[:] = self._bg_array
+        # Pillow image (lazy-created for compatibility)
+        self._image = None
+        self._image_dirty = True
 
     def clear(self):
         """Clear the canvas to the background color."""
-        # Reuse the existing image buffer instead of allocating a new one
-        if not hasattr(self, '_bg_image'):
-            self._bg_image = Image.new("RGBA", (self.width, self.height), self.background)
-        self._image.paste(self._bg_image)
+        self._pixels[:] = self._bg_array
+        self._image_dirty = True
 
     def set_pixel(self, x: int, y: int, color: tuple):
         """Set a single pixel. Silently ignores out-of-bounds coordinates."""
         if 0 <= x < self.width and 0 <= y < self.height:
-            # Alpha compositing for semi-transparent pixels
-            if len(color) == 4 and color[3] < 255:
-                existing = self._image.getpixel((x, y))
-                blended = self._alpha_blend(color, existing)
-                self._image.putpixel((x, y), blended)
+            if len(color) >= 4 and color[3] < 255:
+                # Alpha compositing
+                fg = np.array(color[:4], dtype=np.float32)
+                bg = self._pixels[y, x].astype(np.float32)
+                fa = fg[3] / 255.0
+                ba = bg[3] / 255.0
+                out_a = fa + ba * (1.0 - fa)
+                if out_a > 0:
+                    out_rgb = (fg[:3] * fa + bg[:3] * ba * (1.0 - fa)) / out_a
+                    self._pixels[y, x, :3] = out_rgb.astype(np.uint8)
+                    self._pixels[y, x, 3] = int(out_a * 255)
+                else:
+                    self._pixels[y, x] = 0
             else:
-                self._image.putpixel((x, y), color[:4])
+                self._pixels[y, x] = color[:4]
+            self._image_dirty = True
+
+    def _sync_image(self):
+        """Sync the Pillow image from the numpy array."""
+        if self._image_dirty or self._image is None:
+            self._image = Image.fromarray(self._pixels, mode="RGBA")
+            self._image_dirty = False
+
+    @property
+    def _pil_image(self) -> Image.Image:
+        """Get the current Pillow image (syncs from numpy if needed)."""
+        self._sync_image()
+        return self._image
 
     def blit(self, image: Image.Image, x: int, y: int):
         """Paste an RGBA image onto the canvas with alpha compositing.
@@ -54,22 +87,38 @@ class Canvas:
         if crop_w <= 0 or crop_h <= 0:
             return  # Entirely off-screen
 
-        # Crop and paste with alpha mask
-        if src_x > 0 or src_y > 0 or crop_w < image.width or crop_h < image.height:
-            cropped = image.crop((src_x, src_y, src_x + crop_w, src_y + crop_h))
-        else:
-            cropped = image
+        # Convert source to numpy and composite
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
 
-        if cropped.mode == "RGBA":
-            self._image.paste(cropped, (dst_x, dst_y), mask=cropped)
-        else:
-            self._image.paste(cropped, (dst_x, dst_y))
+        src_array = np.array(image)
+        src_region = src_array[src_y:src_y + crop_h, src_x:src_x + crop_w]
+
+        # Vectorized alpha compositing
+        fg = src_region.astype(np.float32)
+        bg = self._pixels[dst_y:dst_y + crop_h, dst_x:dst_x + crop_w].astype(np.float32)
+
+        fa = fg[:, :, 3:4] / 255.0
+        ba = bg[:, :, 3:4] / 255.0
+        out_a = fa + ba * (1.0 - fa)
+
+        # Avoid division by zero
+        safe_a = np.where(out_a > 0, out_a, 1.0)
+        out_rgb = (fg[:, :, :3] * fa + bg[:, :, :3] * ba * (1.0 - fa)) / safe_a
+
+        result = np.zeros_like(fg)
+        result[:, :, :3] = out_rgb
+        result[:, :, 3:4] = out_a * 255.0
+
+        self._pixels[dst_y:dst_y + crop_h, dst_x:dst_x + crop_w] = result.astype(np.uint8)
+        self._image_dirty = True
 
     def get_frame(self, upscale: int = 1) -> Image.Image:
         """Return the canvas as a PIL Image, optionally upscaled.
 
         Always uses NEAREST resampling to preserve pixel crispness.
         """
+        self._sync_image()
         if upscale <= 1:
             return self._image.copy()
 
@@ -120,9 +169,7 @@ class Canvas:
             self.blit(chunky, x, y)
 
     @staticmethod
-    def _alpha_blend(
-        fg: tuple, bg: tuple
-    ) -> tuple:
+    def _alpha_blend(fg: tuple, bg: tuple) -> tuple:
         """Alpha-composite foreground over background."""
         fa = fg[3] / 255.0
         ba = bg[3] / 255.0 if len(bg) >= 4 else 1.0

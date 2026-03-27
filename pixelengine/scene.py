@@ -341,15 +341,14 @@ class Scene:
             w = max(4, min(self.canvas.width, int(w * 1.5)))
             h = max(4, min(self.canvas.height, int(h * 1.5)))
             temp_canvas = Canvas(w, h, "#00000000")
-            temp_canvas._image = Image.new("RGBA", (w, h), (0, 0, 0, 0))
             orig_x, orig_y = obj.x, obj.y
             obj.x = w // 4  # Offset inside temp canvas
             obj.y = h // 4
             obj.render(temp_canvas)
             obj.x, obj.y = orig_x, orig_y
-            # Blit with quality scaling
+            # Blit with quality scaling using Pillow image from temp canvas
             self.canvas.blit_quality(
-                temp_canvas._image,
+                temp_canvas._pil_image,
                 int(orig_x), int(orig_y),
                 quality,
             )

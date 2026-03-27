@@ -1,13 +1,23 @@
 """PixelEngine physics — gravity, forces, and body simulation.
 
-Simple Euler-integration physics system for educational simulations.
-PhysicsWorld manages bodies and steps the simulation each frame.
+Uses Pymunk (Chipmunk2D) when available for robust rigid-body physics.
+Falls back to a simple Euler-integration system otherwise.
 """
 from pixelengine.pobject import PObject
+
+# Try importing Pymunk
+try:
+    import pymunk
+    HAS_PYMUNK = True
+except ImportError:
+    HAS_PYMUNK = False
 
 
 class PhysicsBody:
     """Wraps a PObject with physics properties.
+
+    When Pymunk is available, creates native Pymunk Body + Shape objects
+    for accurate rigid-body physics. Otherwise uses simple Euler integration.
 
     Usage::
 
@@ -24,12 +34,67 @@ class PhysicsBody:
         self.mass = max(0.001, mass)
         self.vx = vx
         self.vy = vy
-        self.ax = 0.0  # Accumulated acceleration
+        self.ax = 0.0
         self.ay = 0.0
-        self.restitution = restitution  # Bounciness (0=none, 1=perfect)
-        self.friction = friction         # Velocity damping
-        self.is_static = is_static       # Static bodies don't move
+        self.restitution = restitution
+        self.friction = friction
+        self.is_static = is_static
         self.active = True
+
+        # Pymunk objects (created when added to a PymunkWorld)
+        self._pm_body = None
+        self._pm_shape = None
+
+    def _create_pymunk(self):
+        """Create Pymunk body and shape from PObject geometry."""
+        if not HAS_PYMUNK:
+            return
+
+        if self.is_static:
+            body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        else:
+            moment = pymunk.moment_for_circle(self.mass, 0,
+                                               self._radius or 5)
+            body = pymunk.Body(self.mass, moment)
+
+        body.position = (self.pobject.x + (self._radius or 0),
+                        self.pobject.y + (self._radius or 0))
+        body.velocity = (self.vx, self.vy)
+
+        # Create shape based on geometry
+        if self._radius is not None:
+            shape = pymunk.Circle(body, self._radius)
+        elif self._width is not None and self._height is not None:
+            hw, hh = self._width / 2, self._height / 2
+            verts = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+            shape = pymunk.Poly(body, verts)
+            body.position = (self.pobject.x + hw,
+                           self.pobject.y + hh)
+        else:
+            shape = pymunk.Circle(body, 2)
+
+        shape.elasticity = self.restitution
+        shape.friction = max(0, 1.0 - self.friction)
+        shape.collision_type = id(self) % (2**31)  # Unique collision type
+
+        self._pm_body = body
+        self._pm_shape = shape
+
+    def _sync_from_pymunk(self):
+        """Update PObject position from Pymunk body."""
+        if self._pm_body is None:
+            return
+        px, py = self._pm_body.position
+        if self._radius is not None:
+            self.pobject.x = px - self._radius
+            self.pobject.y = py - self._radius
+        elif self._width is not None and self._height is not None:
+            self.pobject.x = px - self._width / 2
+            self.pobject.y = py - self._height / 2
+        else:
+            self.pobject.x = px
+            self.pobject.y = py
+        self.vx, self.vy = self._pm_body.velocity
 
     @property
     def _radius(self):
@@ -64,13 +129,19 @@ class PhysicsBody:
 
     def apply_force(self, fx: float, fy: float):
         """Apply a force this frame (accumulated into acceleration)."""
-        self.ax += fx / self.mass
-        self.ay += fy / self.mass
+        if self._pm_body and HAS_PYMUNK:
+            self._pm_body.apply_force_at_local_point((fx, fy))
+        else:
+            self.ax += fx / self.mass
+            self.ay += fy / self.mass
 
     def apply_impulse(self, ix: float, iy: float):
         """Apply an instant velocity change."""
-        self.vx += ix / self.mass
-        self.vy += iy / self.mass
+        if self._pm_body and HAS_PYMUNK:
+            self._pm_body.apply_impulse_at_local_point((ix, iy))
+        else:
+            self.vx += ix / self.mass
+            self.vy += iy / self.mass
 
     @property
     def center_x(self) -> float:
@@ -100,6 +171,10 @@ class PhysicsBody:
 class PhysicsWorld:
     """Manages physics bodies and steps the simulation.
 
+    Uses Pymunk when available for accurate rigid-body physics with
+    proper collision detection and response. Falls back to simple
+    Euler integration otherwise.
+
     Usage::
 
         physics = PhysicsWorld(gravity_y=100)  # pixels/s²
@@ -114,17 +189,47 @@ class PhysicsWorld:
         self.gravity_x = gravity_x
         self.gravity_y = gravity_y
         self.bodies: list = []
-        self.bounds = bounds  # (x_min, y_min, x_max, y_max) or None
+        self.bounds = bounds
         self._callbacks: list = []
+        self._use_pymunk = HAS_PYMUNK
+
+        # Pymunk space
+        if self._use_pymunk:
+            self._space = pymunk.Space()
+            self._space.gravity = (gravity_x, gravity_y)
+            self._body_map = {}  # collision_type -> PhysicsBody
+        else:
+            self._space = None
+
+    def _pymunk_post_step_collisions(self):
+        """Check for collisions after step and fire callbacks."""
+        if not self._callbacks:
+            return
+        for arb in self._space._get_arbiters():
+            shapes = arb.shapes
+            if len(shapes) >= 2:
+                body_a = self._body_map.get(shapes[0].collision_type)
+                body_b = self._body_map.get(shapes[1].collision_type)
+                if body_a and body_b:
+                    for cb in self._callbacks:
+                        cb(body_a, body_b)
 
     def add_body(self, body: PhysicsBody):
         if body not in self.bodies:
             self.bodies.append(body)
+            if self._use_pymunk:
+                body._create_pymunk()
+                if body._pm_body and body._pm_shape:
+                    self._space.add(body._pm_body, body._pm_shape)
+                    self._body_map[body._pm_shape.collision_type] = body
         return self
 
     def remove_body(self, body: PhysicsBody):
         if body in self.bodies:
             self.bodies.remove(body)
+            if self._use_pymunk and body._pm_body and body._pm_shape:
+                self._space.remove(body._pm_shape, body._pm_body)
+                self._body_map.pop(body._pm_shape.collision_type, None)
         return self
 
     def add_collision_callback(self, callback):
@@ -133,6 +238,40 @@ class PhysicsWorld:
 
     def step(self, dt: float):
         """Advance simulation by dt seconds."""
+        if self._use_pymunk:
+            self._step_pymunk(dt)
+        else:
+            self._step_euler(dt)
+
+    def _step_pymunk(self, dt: float):
+        """Step using Pymunk's built-in physics."""
+        # Enforce bounds using segment shapes (lazy init)
+        if self.bounds and not hasattr(self, '_bounds_added'):
+            bx_min, by_min, bx_max, by_max = self.bounds
+            walls = [
+                pymunk.Segment(self._space.static_body, (bx_min, by_min), (bx_max, by_min), 5),
+                pymunk.Segment(self._space.static_body, (bx_max, by_min), (bx_max, by_max), 5),
+                pymunk.Segment(self._space.static_body, (bx_max, by_max), (bx_min, by_max), 5),
+                pymunk.Segment(self._space.static_body, (bx_min, by_max), (bx_min, by_min), 5),
+            ]
+            for w in walls:
+                w.elasticity = 0.8
+                w.friction = 0.3
+            self._space.add(*walls)
+            self._bounds_added = True
+
+        self._space.step(dt)
+
+        # Fire collision callbacks
+        self._pymunk_post_step_collisions()
+
+        # Sync positions back to PObjects
+        for body in self.bodies:
+            if not body.is_static and body.active:
+                body._sync_from_pymunk()
+
+    def _step_euler(self, dt: float):
+        """Fallback: simple Euler integration (original behavior)."""
         for body in self.bodies:
             if body.is_static or not body.active:
                 continue
@@ -176,20 +315,17 @@ class PhysicsWorld:
     def _check_collision(self, a: PhysicsBody, b: PhysicsBody) -> bool:
         """Check if two bodies are colliding."""
         if a.shape_type == "circle" and b.shape_type == "circle":
-            # Circle-circle
             dx = a.center_x - b.center_x
             dy = a.center_y - b.center_y
             dist_sq = dx * dx + dy * dy
             r_sum = (a._radius or 0) + (b._radius or 0)
             return dist_sq < r_sum * r_sum
         elif a.shape_type == "rect" and b.shape_type == "rect":
-            # AABB
             return (a.x < b.x + (b._width or 0) and
                     a.x + (a._width or 0) > b.x and
                     a.y < b.y + (b._height or 0) and
                     a.y + (a._height or 0) > b.y)
         else:
-            # Mixed or point — use AABB approximation
             ax1 = a.x
             ay1 = a.y
             aw = a._width or (a._radius or 0) * 2
@@ -207,7 +343,6 @@ class PhysicsWorld:
             return
 
         if a.shape_type == "circle" and b.shape_type == "circle":
-            # Circle-circle: swap velocities along collision normal
             dx = b.center_x - a.center_x
             dy = b.center_y - a.center_y
             dist = (dx * dx + dy * dy) ** 0.5
@@ -215,7 +350,6 @@ class PhysicsWorld:
                 dist = 0.001
             nx, ny = dx / dist, dy / dist
 
-            # Separation
             overlap = (a._radius or 0) + (b._radius or 0) - dist
             if overlap > 0:
                 if not a.is_static:
@@ -225,12 +359,11 @@ class PhysicsWorld:
                     b.x += nx * overlap / 2
                     b.y += ny * overlap / 2
 
-            # Velocity reflection
             rel_vx = a.vx - b.vx
             rel_vy = a.vy - b.vy
             vel_along = rel_vx * nx + rel_vy * ny
             if vel_along > 0:
-                return  # Moving apart
+                return
 
             restitution = min(a.restitution, b.restitution)
             j = -(1 + restitution) * vel_along
@@ -246,7 +379,6 @@ class PhysicsWorld:
                 b.vx -= j * nx / b.mass
                 b.vy -= j * ny / b.mass
         else:
-            # AABB collision: simple velocity reversal
             restitution = min(a.restitution, b.restitution)
             if not a.is_static:
                 a.vx *= -restitution

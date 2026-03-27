@@ -402,8 +402,8 @@ class LightingEngine:
 
         Each pixel: result = canvas_pixel * (light_map_pixel / 255)
         """
-        # Convert canvas image to NumPy array
-        canvas_arr = np.array(canvas._image, dtype=np.float32)
+        # Work directly with canvas numpy array
+        canvas_arr = canvas._pixels.astype(np.float32)
 
         # Multiply RGB channels by light map
         canvas_arr[:, :, 0] = canvas_arr[:, :, 0] * light_arr[:, :, 0] / 255.0
@@ -412,4 +412,5 @@ class LightingEngine:
         # Alpha channel stays unchanged
 
         np.clip(canvas_arr, 0, 255, out=canvas_arr)
-        canvas._image = Image.fromarray(canvas_arr.astype(np.uint8))
+        canvas._pixels = canvas_arr.astype(np.uint8)
+        canvas._image_dirty = True

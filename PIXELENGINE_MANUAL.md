@@ -1,4 +1,4 @@
-# PixelEngine v0.4.0
+# PixelEngine v0.5.0
 
 **PixelEngine** is a specialized, code-first Python framework for generating educational, animated pixel art videos. It renders at a configurable canvas resolution (default **480×270**) and upscales with nearest-neighbor to **1920×1080** (Full HD) for crisp pixel edges.
 
@@ -10,8 +10,9 @@ All rendering is done via **Pillow** images encoded straight into **ffmpeg** wit
 
 1. **Python**: 3.8+ (Virtual Environment **highly** recommended)
 2. **Core Dependencies**: `Pillow`, `numpy`
-3. **Audio Dependencies**: `soundfile`, `kokoro-onnx` (default TTS), `chatterbox-tts`, `torch`, `torchaudio` (optional high-quality TTS)
-4. **System Dep**: `ffmpeg` (must be accessible in PATH to mux final MP4s).
+3. **Optional High-Performance Packages**: `av` (PyAV for 3x faster video encoding), `pymunk` (for rigid-body physics), `pydub` (for professional audio mixing). Install all with `pip install .[perf]`.
+4. **Audio Dependencies**: `soundfile`, `kokoro-onnx` (default TTS), `chatterbox-tts`, `torch`, `torchaudio` (optional high-quality TTS)
+5. **System Dep**: `ffmpeg` (must be accessible in PATH to mux final MP4s).
 
 ---
 
