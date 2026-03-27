@@ -1,4 +1,4 @@
-# PixelEngine v0.3.0
+# PixelEngine v0.4.0
 
 **PixelEngine** is a specialized, code-first Python framework for generating educational, animated pixel art videos. It renders at a configurable canvas resolution (default **480×270**) and upscales with nearest-neighbor to **1920×1080** (Full HD) for crisp pixel edges.
 
@@ -92,65 +92,132 @@ Use `self.play(*animations, duration=X)` to run interpolation frames.
 - **Transforms**: `MoveTo`, `MoveBy`, `Scale`, `Rotate`, `ColorShift`.
 - **Visibility**: `FadeIn`, `FadeOut`, `Blink`.
 - **Text**: `TypeWriter` (Reveals text character by character).
-- **Control Flow**: `AnimationGroup` (fires concurrently), `Sequence` (fires linearly).
+- **Control Flow**: `AnimationGroup` (fires concurrently), `Sequence` (fires linearly), `Stagger` (fires with cascade delay).
 
 **Easing Functions**: Pass `easing=...` into an animation.
-Available easings: `linear`, `ease_in`, `ease_out`, `ease_in_out`, `bounce`, `elastic`.
+Available easings: `linear`, `ease_in`, `ease_out`, `ease_in_out`, `bounce`, `elastic`, `back_in`, `back_out`, `back_in_out`, `circ_in`, `circ_out`, `expo_in`, `expo_out`, `sine_in`, `sine_out`, `steps(n)`, `custom_bezier(x1,y1,x2,y2)`.
 
 ---
 
 ## 3.1 Manim-like Construction Animations (v2)
-Build shapes gradually — inspired by Manim's Create/Transform pattern.
 
 - `GrowFromPoint(target, point_x, point_y)` — Object scales from 0 at a point to full size.
-- `GrowFromEdge(target, edge="bottom")` — Bar/rect extends from an edge (bottom, top, left, right). **Perfect for bar chart animations!**
+- `GrowFromEdge(target, edge="bottom")` — Bar/rect extends from an edge. **Perfect for bar chart animations!**
 - `DrawBorderThenFill(target)` — First traces outline, then fills interior.
 - `Create(target)` — Progressive construction (sweep reveal).
 - `Uncreate(target)` — Reverse of Create.
 - `ShowPassingFlash(target)` — Highlight with a sweeping flash.
 - `GrowArrow(target)` — Line grows from start to end point.
 
-```python
-bar = Rect(20, 60, x=50, y=40, color="#00E436")
-scene.add(bar)
-scene.play(GrowFromEdge(bar, edge="bottom"), duration=1.0)
-```
-
 ---
 
 ## 3.2 Shape Morphing (v2)
-Transform one shape into another smoothly.
 
 - `MorphTo(source, target_shape)` — Interpolates position, color, size, and vertices.
 - `ReplacementTransform(source, target_obj)` — Source fades out, target fades in.
 - `TransformMatchingPoints(source, target)` — Morph polygon vertices by index.
 
+---
+
+## 3.3 Stagger Animation Group (v4)
+Animate a list of objects with a wave/cascade effect.
+
 ```python
-square = Rect(30, 30, x=50, y=50, color="#FF004D")
-scene.play(MorphTo(square, target_shape=Circle(15, x=150, y=50, color="#29ADFF")),
-           duration=1.5)
+from pixelengine import Stagger, FadeIn, MoveBy
+
+bars = [Rect(20, h, x=30+i*25, y=200-h, color=c) for i, (h, c) in enumerate(data)]
+scene.add(*bars)
+scene.play(Stagger([FadeIn(b) for b in bars], lag=0.1), duration=2.0)
 ```
 
 ---
 
-## 3.3 Math Objects (v2)
-Educational primitives for data visualization.
+## 3.4 Animation Modifiers (v4)
 
-- `NumberLine(min_val, max_val, step, x, y, width)` — Number line with ticks and labels.
-- `BarChart(data, labels, colors, x, y, width, height)` — Animated bar chart.
-- `Axes(x_range, y_range, x, y, width, height)` — 2D coordinate axes.
-- `Graph(func, axes, color)` — Plot function with `graph.animate_draw()`.
-- `Dot(x, y, radius, color)` — Point marker.
-- `ValueTracker(value)` — Track animatable values for reactive animations.
+- `Delayed(anim, delay=0.3)` — Delay start by a fraction of total duration.
+- `Reversed(anim)` — Play animation in reverse direction.
+- `Looped(anim, count=3)` — Repeat animation N times.
 
 ```python
-chart = BarChart(data=[30, 70, 50, 90], colors=["#FF004D", "#00E436", "#29ADFF", "#FFEC27"],
-                 x=30, y=20, width=200, height=100)
-scene.add(chart)
-scene.play(chart.animate_build(), duration=2.0)
+from pixelengine import Delayed, Reversed, Looped, FadeIn, Rotate
+
+scene.play(Delayed(FadeIn(obj), delay=0.3), duration=2.0)
+scene.play(Reversed(GrowFromPoint(obj, 240, 135)), duration=1.0)
+scene.play(Looped(Rotate(obj, 360), count=3), duration=3.0)
 ```
 
-**ValueTracker + Updaters**:
+---
+
+## 3.5 Spring Physics Animations (v4)
+
+- `SpringTo(target, x, y, stiffness, damping)` — Spring to position with overshoot.
+- `SpringScale(target, factor, stiffness, damping)` — Bouncy scale.
+
+```python
+from pixelengine import SpringTo, SpringScale
+scene.play(SpringTo(obj, x=240, y=135, stiffness=120, damping=10), duration=2.0)
+scene.play(SpringScale(obj, factor=1.5, stiffness=200, damping=8), duration=1.0)
+```
+
+---
+
+## 3.6 Path Animation (v4)
+
+- `BezierPath(start, control1, control2, end)` — Cubic Bézier curve.
+- `QuadraticBezierPath(start, control, end)` — Simpler quadratic Bézier.
+- `CircularPath(center_x, center_y, radius)` — Circular orbit.
+- `LinearPath(points)` — Polyline through multiple points.
+- `FollowPath(target, path, rotate_along=False, loops=1)` — Move along path.
+
+```python
+from pixelengine import BezierPath, FollowPath, CircularPath
+
+path = BezierPath(start=(50, 200), control1=(150, 20),
+                  control2=(300, 20), end=(400, 200))
+scene.play(FollowPath(ball, path, rotate_along=True), duration=2.0)
+
+orbit = CircularPath(center_x=240, center_y=135, radius=80)
+scene.play(FollowPath(dot, orbit, loops=2), duration=4.0)
+```
+
+---
+
+## 3.7 Keyframe Timeline (v4)
+
+```python
+from pixelengine import KeyframeTrack
+
+track = KeyframeTrack(obj)
+track.add(at=0.0, x=50, y=200, opacity=0.0)
+track.add(at=0.3, x=240, y=135, opacity=1.0, easing="ease_out")
+track.add(at=0.7, x=240, y=135, scale_x=1.5)
+track.add(at=1.0, x=400, y=50, opacity=0.0, easing="ease_in")
+scene.play(track.build(), duration=3.0)
+```
+
+---
+
+## 3.8 Text Animation Toolkit (v4)
+
+- `PerCharacter(text, effect, lag)` — Staggered per-character reveal (`"fade_in"`, `"drop_in"`, `"scale_in"`, `"slide_up"`).
+- `PerWord(text, effect, lag)` — Staggered per-word reveal.
+- `ScrambleReveal(text, charset, speed)` — Matrix-style random decode.
+- `TypeWriterPro(text, cursor=True)` — Enhanced typewriter with blinking cursor.
+
+```python
+from pixelengine import PerCharacter, ScrambleReveal, TypeWriterPro
+
+scene.play(PerCharacter(text, "fade_in", lag=0.05), duration=2.0)
+scene.play(ScrambleReveal(text, charset="ABCXYZ0123"), duration=1.5)
+scene.play(TypeWriterPro(text, cursor=True, cursor_blink_rate=2), duration=2.0)
+```
+
+---
+
+## 3.9 Math Objects (v2)
+
+- `NumberLine`, `BarChart`, `Axes`, `Graph`, `Dot`, `ValueTracker`.
+
 ```python
 tracker = ValueTracker(0)
 bar = Rect(10, 50, x=100, y=60, color="#FF004D")
@@ -162,299 +229,99 @@ scene.play(tracker.animate_to(100), duration=2.0)
 ---
 
 ## 4. Sprites
-The `Sprite` system runs off an ASCII matrix array, letting you define pixel characters dynamically without `.png` files!
 
 ```python
 player = Sprite.from_art([
-    "..WW..",  # White
-    ".WWWW.",
-    "WWWWWW",
-    ".BRRB.",  # Blue, Red
-    ".BRRB.",
-    "..BB..",
+    "..WW..", ".WWWW.", "WWWWWW", ".BRRB.", ".BRRB.", "..BB..",
 ], x=60, y=80)
 ```
-- **Flipping**: `player.flip_h = True` to face left.
-- **Animations**: `sprite.add_frames("walk", [frame1, frame2], fps=4)`
-- **Anchor point**: Specify `.anchor_x` / `.anchor_y` for transform offsets.
 
 ---
 
 ## 5. Camera Control
-The `self.camera` moves the viewport over a virtual world.
-- **Transform**: `self.camera.x` / `self.camera.y` / `self.camera.zoom`.
-- **Following**: `self.camera.follow(player, deadzone=10)`
-- **Shake**: `self.camera.shake(intensity=5, duration=0.4)`
-- **Animation**: `CameraPan()`, `CameraZoom()`, `CameraCenterOn()`.
 
-### Camera Focus (v3)
-Set a focus point for depth-of-field effect:
-```python
-self.camera.set_focus(x=240, y=135, radius=30)  # Focus on center
-self.camera.clear_focus()                         # Remove focus
-```
+- `self.camera.x/y/zoom`, `self.camera.follow(player)`, `self.camera.shake()`
+- Animations: `CameraPan()`, `CameraZoom()`, `CameraCenterOn()`
+- Focus: `self.camera.set_focus(x, y, radius)` for depth-of-field.
 
 ---
 
 ## 6. Backgrounds & TileMaps
-**Parallax Scrolling**:
-`ParallaxLayer(art_rows, speed_factor=0.5)` auto-scrolls background images infinitely when the camera moves!
-Available backdrops: `GradientBackground`, `Starfield` (auto-twinkles).
 
-**TileMap**:
-Render dynamic grid block levels.
-```python
-ts = TileSet(tile_size=8)
-ts.add_color_tile("#", "#83769C")  # Wall block
-map_data = [
-    "################",
-    "#..............#",
-]
-level = TileMap(ts, map_data)
-level.get_tile_at(col=5, row=1) # query tile logic
-```
+`ParallaxLayer`, `GradientBackground`, `Starfield`, `TileMap`, `TileSet`.
 
 ---
 
 ## 7. Visual Effects (VFX)
-All visual effects are procedurally coded! Add them to `self.add()`.
-- **Transitions**: `FadeTransition(mode="out")`, `WipeTransition()`, `IrisTransition()`, `DissolveTransition()`.
-- **Particles**: `sparks = ParticleEmitter.sparks(x=128, y=72)`. (Includes `.snow()`, `.fire()`, `.explosion()`, `.rain()`, `.bubbles()`).
-- **Trail**: `Trail(target=player, length=8)` draws "motion blur" steps!
-- **Grid Overlay**: `Grid(cell_size=16)` for explicit math tutorials.
+
+- **Transitions**: `FadeTransition`, `WipeTransition`, `IrisTransition`, `DissolveTransition`.
+- **v4 Transitions**: `PixelateTransition`, `SlideTransition`, `GlitchTransition`, `ShatterTransition`, `CrossDissolve`.
+- **Particles**: `ParticleEmitter.sparks()`, `.fire()`, `.snow()`, `.explosion()`, `.rain()`, `.bubbles()`.
+- **Particle Bursts (v4)**: `ParticleBurst.form_shape()`, `.explode()`, `.disperse()`.
+- **Trail**, **ScreenFlash**, **Grid**, **Outline**.
+
+```python
+from pixelengine import PixelateTransition, GlitchTransition, ParticleBurst
+
+scene.play(GlitchTransition(scene, intensity=0.7), duration=0.5)
+scene.play(ParticleBurst.explode(scene, x=240, y=135), duration=1.0)
+```
 
 ---
 
 ## 8. Lighting & Shadows (v3)
 
-Dynamic lighting with shadow casting.
-
-### Light Types
-```python
-from pixelengine import AmbientLight, PointLight, DirectionalLight
-
-# Global base illumination
-ambient = AmbientLight(intensity=0.2, color="#FFFFFF")
-scene.add_light(ambient)
-
-# Radial light source (inherits PObject — can be animated with MoveTo!)
-torch = PointLight(x=240, y=135, radius=80, color="#FFA300",
-                   intensity=1.2, falloff="quadratic")
-torch.visible = True  # Show light source marker
-scene.add_light(torch)
-scene.play(MoveTo(torch, 100, 50), duration=2.0)  # Animate the light!
-
-# Parallel rays (sun/moon simulation)
-sun = DirectionalLight(angle=225, intensity=0.6, color="#FFEC27")
-scene.add_light(sun)
-```
-
-### Shadow Casting
-Objects with `casts_shadow = True` project shadow polygons away from lights:
-```python
-pillar = Rect(15, 50, x=80, y=60, color="#5F574F")
-pillar.casts_shadow = True
-pillar.shadow_opacity = 0.6  # How dark the shadows are
-scene.add(pillar)
-```
-
-### How It Works
-1. **Shadow pass**: Compute shadow polygons from each object's silhouette
-2. **Light map pass**: Accumulate light contributions (ambient + point + directional)
-3. **Composite pass**: Multiply-blend the light map over the canvas
+`AmbientLight`, `PointLight`, `DirectionalLight`. Objects with `casts_shadow = True` project shadows.
 
 ---
 
 ## 9. Camera Post-Processing Effects (v3)
 
-Apply cinematic post-processing effects to the camera output.
-
-```python
-from pixelengine import Vignette, ChromaticAberration, Letterbox, FilmGrain, DepthOfField
-
-# Vignette — radial edge darkening
-scene.add_camera_fx(Vignette(intensity=0.5, radius=0.6))
-
-# Chromatic Aberration — RGB channel offset
-scene.add_camera_fx(ChromaticAberration(offset=2))
-
-# Letterbox — cinematic black bars
-scene.add_camera_fx(Letterbox(bar_height=20))
-
-# Film Grain — random noise overlay
-scene.add_camera_fx(FilmGrain(intensity=0.08))
-
-# Depth of Field — auto-syncs with camera.set_focus()
-scene.camera.set_focus(x=240, y=135, radius=30)
-
-# Remove effects
-scene.remove_camera_fx(vignette)
-```
-
-Effects are applied in order after upscaling, creating a professional post-processing pipeline.
+`Vignette`, `ChromaticAberration`, `Letterbox`, `FilmGrain`, `DepthOfField`.
 
 ---
 
-## 10. Procedural Audio & TTS
+## 10. Reactive Links (v4)
 
-### Audio Quality
-- **Sample Rate**: 48kHz (CD-quality)
-- **Bit Depth**: 24-bit PCM
-- **AAC Bitrate**: 256kbps
-
-Sounds require NO actual MP3/WAV uploads. They are procedurally sine/square/triangle generated in numpy, natively remuxed in ffmpeg at compile time!
-
-### Auto Sounds
-`Scene` has auto-sounds enabled natively (`self.auto_sound = True`).
-
-### Manual Event Cues
 ```python
-from pixelengine import SoundFX
-self.play_sound(SoundFX.coin())
-self.play_sound(SoundFX.explosion())
-```
+from pixelengine import Link, ReactTo
 
-### VoiceOver (Kokoro ONNX — default)
-```python
-# Default voice (Kokoro — fast, lightweight)
-self.play_voiceover("Hello! I'm your AI teacher.")
-
-# Specify Kokoro voice
-self.play_voiceover("With a specific voice.", voice="af_bella")
-```
-
-### VoiceOver (Chatterbox Turbo — high-quality)
-```python
-# Voice cloning with reference audio
-self.play_voiceover(
-    "Hello! [chuckle] Let me show you something amazing.",
-    voice="path/to/reference_clip.wav",
-    engine="chatterbox"
-)
-```
-
-### Batch Preload (Recommended)
-```python
-from pixelengine import VoiceOver
-VoiceOver.preload(["Line one.", "Line two.", "Line three."])
-```
-
-### Animation During Speech
-```python
-from pixelengine.voiceover import VoiceOver
-sfx, dur = VoiceOver.generate("Look at me move!", engine="kokoro")
-self.play(MoveTo(character, x=200), duration=dur, sound=sfx)
+shadow.add_updater(Link(player, delay=0.15, properties=["x", "y"]))
+label.add_updater(ReactTo(target, lambda t: {"x": t.x, "y": t.y - 15}))
+arrow.add_updater(Link.endpoints(dot_a, dot_b))
 ```
 
 ---
 
-## 11. Texture System (v2)
-Fill shapes with pixel-art-friendly patterns instead of flat colors.
+## 11. Procedural Audio & TTS
 
-**Built-in patterns**: `checkerboard`, `stripes_h`, `stripes_v`, `diagonal`, `dots`, `crosshatch`, `brick`, `herringbone`.
-
-```python
-from pixelengine import PatternTexture, DitherTexture, GradientTexture
-
-rect = Rect(60, 40, x=50, y=30, color="#FFFFFF")
-rect.fill_texture = PatternTexture("checkerboard", cell_size=4,
-                                    color1="#FF004D", color2="#1D2B53")
-scene.add(rect)
-```
-
-- `DitherTexture(color1, color2, density)` — Bayer-matrix ordered dithering.
-- `NoiseTexture(colors, scale)` — Hash-based noise mapped to palette.
-- `GradientTexture(color1, color2, direction)` — Linear gradient fill.
-- `AnimatedTexture(textures, fps)` — Cycles between textures.
-- `ScrollingTexture(texture, dx, dy)` — Texture scrolls over time.
+- `SoundFX.coin()`, `.explosion()`, etc. — procedural synthesis
+- `self.play_voiceover("text")` — Kokoro (default) or Chatterbox TTS
+- Animation during speech: `VoiceOver.generate()` returns `(sfx, duration)`
 
 ---
 
-## 12. Pseudo-3D Rendering (v2)
-Wireframe 3D shapes projected onto the 2D pixel canvas. Perfect for geometry education.
+## 12-14. Textures, 3D, Simulations
 
-```python
-from pixelengine import Cube3D, Vec3
-from pixelengine.objects3d import Rotate3D
-
-cube = Cube3D(size=2.0, color="#29ADFF")
-cube.position = Vec3(0, 0, 5)
-scene.add(cube)
-scene.play(Rotate3D(cube, axis="y", degrees=360), duration=3.0)
-```
-
-**3D Primitives**: `Cube3D`, `Sphere3D`, `Pyramid3D`, `Cylinder3D`, `Mesh3D`, `Axes3D`.
-**Projections**: `perspective` (default) or `isometric`.
-**Camera**: `Camera3D(fov, distance, elevation, azimuth)`, `IsoCamera(scale)`.
-**Animations**: `Rotate3D(obj, axis, degrees)`, `Orbit3D(camera, degrees)`, `Zoom3D(camera, target_distance)`.
+See v2 docs. `PatternTexture`, `Cube3D`, `Pendulum`, `PhysicsWorld`, etc.
 
 ---
 
-## 13. Simulation Engine (v2)
-Physics simulations rendered as video — gravity, collisions, pendulums, springs, orbits.
+## 15. Outputs & File Organization
 
-### Self-contained Simulations
-```python
-from pixelengine import Pendulum, Spring, Rope, OrbitalSystem, FluidParticles
-
-pend = Pendulum(pivot_x=240, pivot_y=50, length=80, angle=45, color="#FF004D")
-scene.add(pend)
-scene.wait(5)  # Physics auto-advances during render
-```
-
-### Physics World (Custom)
-```python
-from pixelengine import PhysicsWorld, PhysicsBody, Circle
-
-physics = PhysicsWorld(gravity_y=100)
-physics.bounds = (0, 0, 480, 270)
-scene.physics = physics  # Auto-stepped each frame
-
-ball = Circle(5, x=240, y=20, color="#FF004D")
-body = PhysicsBody(ball, mass=1.0, restitution=0.8)
-physics.add_body(body)
-scene.add(ball)
-scene.wait(5)
-```
-
-**Simulations**: `Pendulum`, `Spring`, `OrbitalSystem` (N-body gravity), `Rope` (Verlet chain), `FluidParticles` (SPH-like).
-**Physics**: `PhysicsBody`, `PhysicsWorld`, `StaticBody`, `Bounds`, `CollisionCallback`.
-
----
-
-## 14. Outputs & File Organization
-
-By default, PixelEngine now automatically organizes generated scripts, audio, and videos into an `outputs/` folder.
-
-```
-outputs/
-└── my_video/
-    ├── 1920x1080_24fps/
-    │   └── MyScene.mp4     # The final rendered video
-    ├── audio/
-    │   └── MyScene.wav     # The isolated audio track
-    └── scripts/
-        └── my_video.py     # A backup copy of the script
-```
-
-To use this feature, simply call `scene.render()` with no arguments.
-
-```python
-if __name__ == "__main__":
-    scene = MyScene(PixelConfig.landscape())
-    scene.render()  # Auto-organizes to outputs/my_video/
-```
+`scene.render()` auto-organizes to `outputs/<script>/`.
 
 ---
 <br>
 
 # 🤖 Special Guide for AI Agents
+
 **If an AI Agent is tasked with using `PixelEngine` to code a video, STRICTLY REMEMBER:**
 
-1. **Resolution Scale**: Default canvas is **480×270** (landscape) or **270×480** (portrait). For retro style use `PixelConfig.retro()` (256×144). Do NOT make shapes at output resolution (1920×1080).
-2. **Audio Volume Bug / Sync Rules**: Do not mess with `sleep` or real-world `time.time()`. Only use `self.wait(2.0)`. The renderer executes synchronously offline at `24 FPS`.
-3. **Typography**: The font maps to a `5x7` character limitation array inside `text.py`. It is purely uppercase logic.
-4. **Imports**: Import ONLY from the engine facade `pixelengine` root:
+1. **Resolution Scale**: Default canvas is **480×270** (landscape) or **270×480** (portrait). Do NOT make shapes at output resolution.
+2. **Audio/Sync**: Only use `self.wait(2.0)`. The renderer executes synchronously offline at `24 FPS`.
+3. **Typography**: `5x7` uppercase-only font.
+4. **Imports**: Import from `pixelengine` root:
    ```python
    from pixelengine import (
        Scene, PixelConfig, CameraZoom, Rect, Circle, Sprite,
@@ -465,7 +332,7 @@ if __name__ == "__main__":
        MorphTo, ValueTracker, NumberLine, BarChart, Axes, Graph,
        # v2 Textures
        PatternTexture, DitherTexture, GradientTexture,
-       # v2 3D (also from pixelengine.objects3d for Rotate3D)
+       # v2 3D
        Cube3D, Sphere3D, Vec3,
        # v2 Simulations
        Pendulum, Spring, Rope, PhysicsWorld, PhysicsBody,
@@ -473,19 +340,29 @@ if __name__ == "__main__":
        AmbientLight, PointLight, DirectionalLight,
        # v3 Camera Effects
        Vignette, ChromaticAberration, Letterbox, FilmGrain, DepthOfField,
+       # v4 Animation
+       Stagger, Delayed, Reversed, Looped,
+       SpringTo, SpringScale,
+       back_in, back_out, circ_out, expo_out, sine_out, steps, custom_bezier,
+       # v4 Path Animation
+       BezierPath, CircularPath, LinearPath, FollowPath,
+       # v4 Keyframes
+       KeyframeTrack,
+       # v4 Text Animation
+       PerCharacter, PerWord, ScrambleReveal, TypeWriterPro,
+       # v4 Transitions
+       PixelateTransition, GlitchTransition, ShatterTransition, CrossDissolve,
+       # v4 Particle Bursts
+       ParticleBurst,
+       # v4 Reactive Links
+       Link, ReactTo,
    )
    ```
-5. **No File dependencies**: Do **not** try to load `.png`, `.wav`, or `.json`. Use procedural generation.
-6. **VoiceOver** is blocking. Default engine is **Kokoro ONNX** (fast). For simultaneous animation + speech, generate manually:
-   ```python
-   from pixelengine.voiceover import VoiceOver
-   speech_sfx, speech_dur = VoiceOver.generate("Look at me move!")
-   self.play(MoveTo(character, x=200), duration=speech_dur, sound=speech_sfx)
-   ```
-   Supports paralinguistic tags: `[laugh]`, `[chuckle]`, `[cough]` for natural realism.
-7. **Textures**: Set `shape.fill_texture = PatternTexture(...)` before adding to scene.
-8. **3D Objects**: Position in 3D via `obj.position = Vec3(x, y, z)` and set `obj.rotation_x/y/z` for rotation. Use `Rotate3D` animation for smooth rotation.
-9. **Simulations**: Self-contained objects like `Pendulum` and `Rope` auto-advance physics during `self.wait()`. For custom physics, create a `PhysicsWorld` and assign to `scene.physics`.
-10. **Lighting (v3)**: Use `scene.add_light()` / `scene.remove_light()`. PointLights are PObjects and can be animated with `MoveTo`. Set `obj.casts_shadow = True` for shadow casting.
-11. **Camera Effects (v3)**: Use `scene.add_camera_fx()` / `scene.remove_camera_fx()`. Effects are applied post-upscale. Use `self.camera.set_focus()` for automatic depth-of-field.
-12. **Quality Control (v3)**: Set `obj.render_quality` per object. Values < 1.0 = chunkier, > 1.0 = smoother.
+5. **No File dependencies**: Use procedural generation only.
+6. **VoiceOver** is blocking. For simultaneous animation + speech, use `VoiceOver.generate()`.
+7. **Stagger (v4)**: Use `Stagger([anim1, anim2, ...], lag=0.1)` for wave/cascade effects.
+8. **Springs (v4)**: Use `SpringTo`/`SpringScale` for organic bouncy motion.
+9. **Paths (v4)**: Use `FollowPath(obj, BezierPath(...))` for curved motion. `rotate_along=True` auto-rotates.
+10. **Keyframes (v4)**: Use `KeyframeTrack(obj).add(at=0.0, ...).add(at=1.0, ...).build()` for timeline animations.
+11. **Text Animations (v4)**: `PerCharacter(text, "fade_in", lag=0.05)` for staggered text. `ScrambleReveal` for Matrix-style.
+12. **Reactive Links (v4)**: `obj.add_updater(Link(source))` for following. `ReactTo(source, fn)` for custom reactions.

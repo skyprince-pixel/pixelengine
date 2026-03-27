@@ -702,3 +702,512 @@ class Grid(PObject):
         for gy in range(0, self.grid_height + 1, self.cell_size):
             for gx in range(self.grid_width):
                 canvas.set_pixel(ox + gx, oy + gy, color)
+
+
+# ═══════════════════════════════════════════════════════════
+#  Advanced Scene Transitions (v4)
+# ═══════════════════════════════════════════════════════════
+
+class PixelateTransition:
+    """Pixelate the scene into chunky blocks then resolve.
+
+    Usage::
+
+        scene.play(PixelateTransition(scene, block_size=8), duration=0.8)
+
+    Args:
+        scene: The Scene instance.
+        block_size: Maximum pixel block size at peak pixelation.
+        color: Background color at peak.
+    """
+
+    def __init__(self, scene, block_size: int = 8, color: str = "#000000"):
+        self.scene = scene
+        self.block_size = block_size
+        self.color = parse_color(color)
+        self._overlay_obj = None
+
+    def interpolate(self, alpha: float):
+        alpha = max(0.0, min(1.0, alpha))
+        w = self.scene.config.canvas_width
+        h = self.scene.config.canvas_height
+
+        # Peak pixelation at alpha=0.5, resolve by alpha=1.0
+        if alpha < 0.5:
+            t = alpha / 0.5  # 0→1 during first half
+        else:
+            t = 1.0 - (alpha - 0.5) / 0.5  # 1→0 during second half
+
+        block = max(1, int(self.block_size * t))
+
+        if self._overlay_obj is None:
+            self._overlay_img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            self._overlay_obj = _ImageOverlay(self._overlay_img, z_index=9999)
+            self.scene.add(self._overlay_obj)
+
+        if block > 1:
+            # Create pixelated overlay
+            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            # Darken based on pixelation intensity
+            darkness = int(255 * t * 0.3)
+            for by in range(0, h, block):
+                for bx in range(0, w, block):
+                    color = (*self.color[:3], darkness)
+                    for py in range(by, min(by + block, h)):
+                        for px in range(bx, min(bx + block, w)):
+                            img.putpixel((px, py), color)
+            self._overlay_obj._image = img
+        else:
+            self._overlay_obj._image = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+
+        if alpha >= 1.0:
+            self.scene.remove(self._overlay_obj)
+            self._overlay_obj = None
+
+
+class SlideTransition:
+    """Slide the scene content in a direction, revealing new content.
+
+    Usage::
+
+        scene.play(SlideTransition(scene, direction="left"), duration=0.8)
+
+    Args:
+        direction: "left", "right", "up", "down"
+        color: Color of the area revealed behind the slide.
+    """
+
+    def __init__(self, scene, direction: str = "left", color: str = "#000000"):
+        self.scene = scene
+        self.direction = direction
+        self.color = parse_color(color)
+        self._overlay = None
+        self._bg = None
+
+    def interpolate(self, alpha: float):
+        alpha = max(0.0, min(1.0, alpha))
+        w = self.scene.config.canvas_width
+        h = self.scene.config.canvas_height
+
+        # Create background and sliding overlay
+        if self._overlay is None:
+            from pixelengine.shapes import Rect
+            self._bg = Rect(w, h, x=0, y=0)
+            self._bg.color = self.color
+            self._bg.z_index = 9997
+            self._overlay = Rect(w, h, x=0, y=0)
+            self._overlay.color = self.color
+            self._overlay.z_index = 9998
+            self.scene.add(self._bg)
+            self.scene.add(self._overlay)
+
+        if self.direction == "left":
+            self._overlay.x = -int(w * alpha)
+            self._overlay.width = w
+        elif self.direction == "right":
+            self._overlay.x = int(w * alpha)
+            self._overlay.width = w
+        elif self.direction == "up":
+            self._overlay.y = -int(h * alpha)
+            self._overlay.height = h
+        elif self.direction == "down":
+            self._overlay.y = int(h * alpha)
+            self._overlay.height = h
+
+        self._overlay.opacity = 1.0 - alpha * 0.5
+
+        if alpha >= 1.0:
+            self.scene.remove(self._overlay)
+            self.scene.remove(self._bg)
+            self._overlay = None
+            self._bg = None
+
+
+class GlitchTransition:
+    """Glitch effect — RGB split, scan lines, and noise burst.
+
+    Usage::
+
+        scene.play(GlitchTransition(scene, intensity=0.7), duration=0.5)
+
+    Args:
+        intensity: Glitch intensity (0.0–1.0).
+        seed: Random seed for reproducibility.
+    """
+
+    def __init__(self, scene, intensity: float = 0.7, seed: int = None):
+        self.scene = scene
+        self.intensity = intensity
+        self._rng = random.Random(seed)
+        self._overlay_obj = None
+
+    def interpolate(self, alpha: float):
+        alpha = max(0.0, min(1.0, alpha))
+        w = self.scene.config.canvas_width
+        h = self.scene.config.canvas_height
+
+        # Intensity peaks at 0.5
+        if alpha < 0.5:
+            t = alpha / 0.5
+        else:
+            t = 1.0 - (alpha - 0.5) / 0.5
+        t *= self.intensity
+
+        if self._overlay_obj is None:
+            self._overlay_img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            self._overlay_obj = _ImageOverlay(self._overlay_img, z_index=9999)
+            self.scene.add(self._overlay_obj)
+
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+
+        # RGB channel offset bars
+        num_bars = max(1, int(5 * t))
+        for _ in range(num_bars):
+            bar_y = self._rng.randint(0, h - 1)
+            bar_h = self._rng.randint(1, max(1, int(6 * t)))
+            offset_x = self._rng.randint(-int(10 * t), int(10 * t))
+            # Random RGB tinted bar
+            channel = self._rng.choice([(255, 0, 0), (0, 255, 0), (0, 0, 255)])
+            bar_alpha = int(180 * t)
+            color = (*channel, bar_alpha)
+            for y in range(bar_y, min(bar_y + bar_h, h)):
+                for x in range(max(0, offset_x), min(w, w + offset_x)):
+                    img.putpixel((x % w, y), color)
+
+        # Scan lines
+        if t > 0.3:
+            scan_alpha = int(60 * t)
+            for y in range(0, h, 2):
+                for x in range(w):
+                    img.putpixel((x, y), (0, 0, 0, scan_alpha))
+
+        # Random noise pixels
+        noise_count = int(w * h * t * 0.02)
+        for _ in range(noise_count):
+            nx = self._rng.randint(0, w - 1)
+            ny = self._rng.randint(0, h - 1)
+            brightness = self._rng.randint(100, 255)
+            img.putpixel((nx, ny), (brightness, brightness, brightness, int(200 * t)))
+
+        self._overlay_obj._image = img
+
+        if alpha >= 1.0:
+            self.scene.remove(self._overlay_obj)
+            self._overlay_obj = None
+
+
+class ShatterTransition:
+    """Scene breaks into pixel-tiles that fly away.
+
+    Usage::
+
+        scene.play(ShatterTransition(scene, pieces=16), duration=1.2)
+
+    Args:
+        pieces: Number of tile columns/rows (total tiles = pieces²).
+        color: Background color revealed behind shatter.
+    """
+
+    def __init__(self, scene, pieces: int = 8, color: str = "#000000",
+                 seed: int = None):
+        self.scene = scene
+        self.pieces = max(2, pieces)
+        self.color = parse_color(color)
+        self._rng = random.Random(seed)
+        self._overlay_obj = None
+        self._tile_velocities = None
+
+    def interpolate(self, alpha: float):
+        alpha = max(0.0, min(1.0, alpha))
+        w = self.scene.config.canvas_width
+        h = self.scene.config.canvas_height
+
+        if self._overlay_obj is None:
+            self._overlay_img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            self._overlay_obj = _ImageOverlay(self._overlay_img, z_index=9999)
+            self.scene.add(self._overlay_obj)
+
+            # Generate random velocities for each tile
+            self._tile_velocities = []
+            for _ in range(self.pieces * self.pieces):
+                vx = self._rng.uniform(-3, 3)
+                vy = self._rng.uniform(-4, 1)
+                rot = self._rng.uniform(-0.5, 0.5)
+                self._tile_velocities.append((vx, vy, rot))
+
+        tile_w = w // self.pieces
+        tile_h = h // self.pieces
+
+        img = Image.new("RGBA", (w, h), self.color if alpha > 0.1 else (0, 0, 0, 0))
+
+        # Each tile flies away based on its velocity
+        for row in range(self.pieces):
+            for col in range(self.pieces):
+                idx = row * self.pieces + col
+                vx, vy, _ = self._tile_velocities[idx]
+
+                # Tile offset increases with alpha
+                ox = int(vx * alpha * w * 0.5)
+                oy = int(vy * alpha * h * 0.5 + alpha * alpha * h * 0.3)  # gravity
+
+                tiled_alpha = int(255 * max(0, 1.0 - alpha * 1.5))
+
+                # Draw a small colored rect at the displaced position
+                for py in range(tile_h):
+                    for px in range(tile_w):
+                        src_x = col * tile_w + px + ox
+                        src_y = row * tile_h + py + oy
+                        if 0 <= src_x < w and 0 <= src_y < h:
+                            img.putpixel((src_x, src_y), (200, 200, 200, tiled_alpha))
+
+        self._overlay_obj._image = img
+
+        if alpha >= 1.0:
+            self.scene.remove(self._overlay_obj)
+            self._overlay_obj = None
+
+
+class CrossDissolve:
+    """Cross-dissolve between scene states via opacity crossover.
+
+    Usage::
+
+        scene.play(CrossDissolve(scene), duration=1.0)
+    """
+
+    def __init__(self, scene, color: str = "#000000"):
+        self.scene = scene
+        self.color = parse_color(color)
+        self._overlay = None
+
+    def interpolate(self, alpha: float):
+        alpha = max(0.0, min(1.0, alpha))
+        w = self.scene.config.canvas_width
+        h = self.scene.config.canvas_height
+
+        if self._overlay is None:
+            from pixelengine.shapes import Rect
+            self._overlay = Rect(w, h, x=0, y=0)
+            self._overlay.color = self.color
+            self._overlay.z_index = 9999
+            self.scene.add(self._overlay)
+
+        # Peak at 0.5, then fade out
+        if alpha < 0.5:
+            self._overlay.opacity = alpha * 2
+        else:
+            self._overlay.opacity = (1.0 - alpha) * 2
+
+        if alpha >= 1.0:
+            self.scene.remove(self._overlay)
+            self._overlay = None
+
+
+# ═══════════════════════════════════════════════════════════
+#  Particle Burst Shapes (v4)
+# ═══════════════════════════════════════════════════════════
+
+class ParticleBurst:
+    """Particles that form/explode shapes — cinematic visual effects.
+
+    Usage::
+
+        # Particles converge into a shape
+        scene.play(ParticleBurst.form_shape(
+            scene, shape_points=[(x, y), ...], particle_count=100
+        ), duration=2.0)
+
+        # Object explodes into particles
+        scene.play(ParticleBurst.explode(scene, x=240, y=135), duration=1.0)
+    """
+
+    def __init__(self, scene, particles: list = None, mode: str = "explode"):
+        super().__init__()
+        self.scene = scene
+        self._particles = particles or []
+        self.mode = mode
+        self._emitter = None
+
+    class _BurstAnim:
+        """Internal animation for particle burst effects."""
+
+        def __init__(self, scene, start_positions, end_positions,
+                     colors, mode="form"):
+            self.scene = scene
+            self.start_positions = start_positions
+            self.end_positions = end_positions
+            self.colors = colors
+            self.mode = mode
+            self._overlay_obj = None
+
+        def interpolate(self, alpha: float):
+            alpha = max(0.0, min(1.0, alpha))
+            w = self.scene.config.canvas_width
+            h = self.scene.config.canvas_height
+
+            if self._overlay_obj is None:
+                img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                self._overlay_obj = _ImageOverlay(img, z_index=9990)
+                self.scene.add(self._overlay_obj)
+
+            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+
+            if self.mode == "form":
+                # Particles converge from random to target
+                t = alpha
+            else:
+                # Particles fly out from target
+                t = alpha
+
+            for i in range(len(self.start_positions)):
+                sx, sy = self.start_positions[i]
+                ex, ey = self.end_positions[i]
+                color = self.colors[i % len(self.colors)]
+
+                if self.mode == "form":
+                    x = int(sx + (ex - sx) * t)
+                    y = int(sy + (ey - sy) * t)
+                    particle_alpha = int(255 * min(1.0, alpha * 2))
+                else:
+                    x = int(ex + (sx - ex) * t)
+                    y = int(ey + (sy - ey) * t)
+                    particle_alpha = int(255 * max(0, 1.0 - alpha * 1.5))
+
+                color_with_alpha = (*color[:3], particle_alpha)
+
+                if 0 <= x < w and 0 <= y < h:
+                    img.putpixel((x, y), color_with_alpha)
+                    # Draw 2x2 for visibility
+                    if x + 1 < w:
+                        img.putpixel((x + 1, y), color_with_alpha)
+                    if y + 1 < h:
+                        img.putpixel((x, y + 1), color_with_alpha)
+                    if x + 1 < w and y + 1 < h:
+                        img.putpixel((x + 1, y + 1), color_with_alpha)
+
+            self._overlay_obj._image = img
+
+            if alpha >= 1.0:
+                self.scene.remove(self._overlay_obj)
+                self._overlay_obj = None
+
+    @classmethod
+    def form_shape(cls, scene, shape_points: list = None,
+                   particle_count: int = 100, color: str = "#29ADFF",
+                   spread: int = 100, seed: int = None):
+        """Create an animation where particles converge to form a shape.
+
+        Args:
+            scene: The Scene instance.
+            shape_points: List of (x, y) positions that define the target shape.
+            particle_count: Number of particles.
+            color: Particle color.
+            spread: How far particles start from their targets.
+            seed: Random seed.
+        """
+        rng = random.Random(seed)
+        parsed_color = parse_color(color)
+        w = scene.config.canvas_width
+        h = scene.config.canvas_height
+
+        if shape_points is None:
+            # Default: circle in center
+            cx, cy = w // 2, h // 2
+            shape_points = []
+            for i in range(particle_count):
+                angle = 2 * math.pi * i / particle_count
+                px = int(cx + 30 * math.cos(angle))
+                py = int(cy + 30 * math.sin(angle))
+                shape_points.append((px, py))
+
+        # Pad or truncate to match particle_count
+        while len(shape_points) < particle_count:
+            shape_points.append(rng.choice(shape_points))
+        shape_points = shape_points[:particle_count]
+
+        # Random start positions
+        start_positions = [
+            (rng.randint(0, w), rng.randint(0, h))
+            for _ in range(particle_count)
+        ]
+        colors = [parsed_color] * particle_count
+
+        return cls._BurstAnim(scene, start_positions, shape_points, colors, mode="form")
+
+    @classmethod
+    def explode(cls, scene, x: int = None, y: int = None,
+                particle_count: int = 80, color: str = "#FF004D",
+                spread: int = 120, seed: int = None):
+        """Create an explosion from a point — particles fly outward.
+
+        Args:
+            scene: The Scene instance.
+            x, y: Explosion center (defaults to canvas center).
+            particle_count: Number of particles.
+            color: Particle color.
+            spread: How far particles fly.
+            seed: Random seed.
+        """
+        rng = random.Random(seed)
+        parsed_color = parse_color(color)
+        w = scene.config.canvas_width
+        h = scene.config.canvas_height
+        cx = x if x is not None else w // 2
+        cy = y if y is not None else h // 2
+
+        # Start from center
+        end_positions = [(cx, cy)] * particle_count
+
+        # Random end (flying outward)
+        start_positions = []
+        for _ in range(particle_count):
+            angle = rng.uniform(0, 2 * math.pi)
+            dist = rng.uniform(20, spread)
+            px = int(cx + dist * math.cos(angle))
+            py = int(cy + dist * math.sin(angle))
+            start_positions.append((px, py))
+
+        # Multi-color explosion
+        explosion_colors = [
+            parse_color("#FF004D"),
+            parse_color("#FFA300"),
+            parse_color("#FFEC27"),
+            parsed_color,
+        ]
+        colors = [rng.choice(explosion_colors) for _ in range(particle_count)]
+
+        return cls._BurstAnim(scene, start_positions, end_positions, colors, mode="explode")
+
+    @classmethod
+    def disperse(cls, scene, x: int = None, y: int = None,
+                 particle_count: int = 60, color: str = "#29ADFF",
+                 spread: int = 80, seed: int = None):
+        """Gentle scatter from a point — particles drift outward.
+
+        Args:
+            scene: The Scene instance.
+            x, y: Center point.
+            particle_count: Number of particles.
+            color: Particle color.
+            spread: How far particles drift.
+            seed: Random seed.
+        """
+        rng = random.Random(seed)
+        parsed_color = parse_color(color)
+        w = scene.config.canvas_width
+        h = scene.config.canvas_height
+        cx = x if x is not None else w // 2
+        cy = y if y is not None else h // 2
+
+        end_positions = [(cx, cy)] * particle_count
+        start_positions = []
+        for _ in range(particle_count):
+            angle = rng.uniform(0, 2 * math.pi)
+            dist = rng.uniform(10, spread)
+            px = int(cx + dist * math.cos(angle))
+            py = int(cy + dist * math.sin(angle))
+            start_positions.append((px, py))
+
+        colors = [parsed_color] * particle_count
+
+        return cls._BurstAnim(scene, start_positions, end_positions, colors, mode="explode")

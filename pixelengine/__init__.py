@@ -1,5 +1,5 @@
 """PixelEngine — A code-first pixel art animation engine."""
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -14,7 +14,7 @@ from pixelengine.color import (
 )
 
 # ── Base Class ──────────────────────────────────────────────
-from pixelengine.pobject import PObject
+from pixelengine.pobject import PObject, Link, ReactTo
 
 # ── Shapes ──────────────────────────────────────────────────
 from pixelengine.shapes import Rect, Circle, Line, Triangle, Polygon
@@ -38,6 +38,27 @@ from pixelengine.animation import (
     ease_in_out,
     bounce,
     elastic,
+    # v4 Easing
+    back_in,
+    back_out,
+    back_in_out,
+    circ_in,
+    circ_out,
+    expo_in,
+    expo_out,
+    sine_in,
+    sine_out,
+    steps,
+    custom_bezier,
+    # v4 Stagger
+    Stagger,
+    # v4 Modifiers
+    Delayed,
+    Reversed,
+    Looped,
+    # v4 Spring Physics
+    SpringTo,
+    SpringScale,
 )
 
 # ── Construction Animations (Manim-like) ───────────────────
@@ -56,6 +77,30 @@ from pixelengine.transform import (
     MorphTo,
     ReplacementTransform,
     TransformMatchingPoints,
+)
+
+# ── Path Animation (v4) ────────────────────────────────────
+from pixelengine.pathanim import (
+    BezierPath,
+    QuadraticBezierPath,
+    CircularPath,
+    LinearPath,
+    FollowPath,
+)
+
+# ── Keyframe Timeline (v4) ─────────────────────────────────
+from pixelengine.keyframes import (
+    Keyframe,
+    KeyframeTrack,
+    KeyframeAnimation,
+)
+
+# ── Text Animation (v4) ────────────────────────────────────
+from pixelengine.textanim import (
+    PerCharacter,
+    PerWord,
+    ScrambleReveal,
+    TypeWriterPro,
 )
 
 # ── Math Objects ────────────────────────────────────────────
@@ -114,6 +159,14 @@ from pixelengine.effects import (
     ScreenFlash,
     Outline,
     Grid,
+    # v4 Transitions
+    PixelateTransition,
+    SlideTransition,
+    GlitchTransition,
+    ShatterTransition,
+    CrossDissolve,
+    # v4 Particle Burst
+    ParticleBurst,
 )
 
 # ── TileMap ─────────────────────────────────────────────────
@@ -175,14 +228,28 @@ __all__ = [
     "FadeIn", "FadeOut", "Scale", "Rotate",
     "Blink", "ColorShift",
     "AnimationGroup", "Sequence",
+    # v4 Animation Groups & Modifiers
+    "Stagger", "Delayed", "Reversed", "Looped",
+    # v4 Spring Physics
+    "SpringTo", "SpringScale",
     # Easing
     "linear", "ease_in", "ease_out", "ease_in_out",
     "bounce", "elastic",
+    "back_in", "back_out", "back_in_out",
+    "circ_in", "circ_out", "expo_in", "expo_out",
+    "sine_in", "sine_out", "steps", "custom_bezier",
     # Construction (Manim-like)
     "GrowFromPoint", "GrowFromEdge", "DrawBorderThenFill",
     "Create", "Uncreate", "ShowPassingFlash", "GrowArrow",
     # Transform
     "MorphTo", "ReplacementTransform", "TransformMatchingPoints",
+    # v4 Path Animation
+    "BezierPath", "QuadraticBezierPath", "CircularPath",
+    "LinearPath", "FollowPath",
+    # v4 Keyframe Timeline
+    "Keyframe", "KeyframeTrack", "KeyframeAnimation",
+    # v4 Text Animation
+    "PerCharacter", "PerWord", "ScrambleReveal", "TypeWriterPro",
     # Math Objects
     "ValueTracker", "NumberLine", "BarChart", "Axes", "Graph", "Dot",
     # Text
@@ -202,6 +269,13 @@ __all__ = [
     "ParticleEmitter",
     "FadeTransition", "WipeTransition", "IrisTransition", "DissolveTransition",
     "Trail", "ScreenFlash", "Outline", "Grid",
+    # v4 Transitions
+    "PixelateTransition", "SlideTransition", "GlitchTransition",
+    "ShatterTransition", "CrossDissolve",
+    # v4 Particle Burst
+    "ParticleBurst",
+    # v4 Reactive Links
+    "Link", "ReactTo",
     # TileMap
     "TileSet", "TileMap",
     # Texture

@@ -71,6 +71,106 @@ def ease_in_out_cubic(t: float) -> float:
         return 1 - (-2 * t + 2) ** 3 / 2
 
 
+# ── v4 Additional Easing Functions ──────────────────────────
+
+
+def back_in(t: float) -> float:
+    """Pull back before accelerating forward."""
+    c = 1.70158
+    return (c + 1) * t * t * t - c * t * t
+
+
+def back_out(t: float) -> float:
+    """Overshoot the target then settle back."""
+    c = 1.70158
+    t -= 1
+    return 1 + (c + 1) * t * t * t + c * t * t
+
+
+def back_in_out(t: float) -> float:
+    """Pull back, accelerate, overshoot, then settle."""
+    c = 1.70158 * 1.525
+    if t < 0.5:
+        return (((2 * t) ** 2) * ((c + 1) * 2 * t - c)) / 2
+    else:
+        return (((2 * t - 2) ** 2) * ((c + 1) * (2 * t - 2) + c) + 2) / 2
+
+
+def circ_in(t: float) -> float:
+    """Circular acceleration from zero."""
+    return 1 - math.sqrt(1 - t * t)
+
+
+def circ_out(t: float) -> float:
+    """Circular deceleration to zero."""
+    t -= 1
+    return math.sqrt(1 - t * t)
+
+
+def expo_in(t: float) -> float:
+    """Exponential acceleration from zero."""
+    return 0.0 if t == 0 else 2 ** (10 * (t - 1))
+
+
+def expo_out(t: float) -> float:
+    """Exponential deceleration to zero."""
+    return 1.0 if t == 1 else 1 - 2 ** (-10 * t)
+
+
+def sine_in(t: float) -> float:
+    """Sinusoidal acceleration from zero."""
+    return 1 - math.cos(t * math.pi / 2)
+
+
+def sine_out(t: float) -> float:
+    """Sinusoidal deceleration to zero."""
+    return math.sin(t * math.pi / 2)
+
+
+def steps(n: int = 4):
+    """Step function easing — pixel-art friendly snappy motion.
+
+    Returns an easing function that quantizes into ``n`` discrete steps.
+
+    Usage::
+
+        scene.play(MoveTo(obj, x=200), duration=1.0, easing=steps(8))
+    """
+    def _steps(t: float) -> float:
+        return math.floor(t * n) / n
+    return _steps
+
+
+def custom_bezier(x1: float, y1: float, x2: float, y2: float):
+    """Create a custom cubic-bezier easing curve.
+
+    Emulates CSS ``cubic-bezier(x1, y1, x2, y2)``.
+
+    Usage::
+
+        my_ease = custom_bezier(0.68, -0.55, 0.27, 1.55)
+        scene.play(MoveTo(obj, x=200), easing=my_ease, duration=1.0)
+    """
+    def _bezier(t: float) -> float:
+        # Newton-Raphson to solve for t on the x-axis, then evaluate y
+        # Simple iterative approach for the cubic bezier
+        guess = t
+        for _ in range(8):
+            # x(t) for cubic bezier with p0=0, p3=1
+            cx = 3 * x1 * guess * (1 - guess) ** 2 + \
+                 3 * x2 * guess ** 2 * (1 - guess) + guess ** 3
+            dx = 3 * x1 * (1 - guess) ** 2 + \
+                 6 * (x2 - x1) * guess * (1 - guess) + 3 * (1 - x2) * guess ** 2
+            if abs(dx) < 1e-9:
+                break
+            guess -= (cx - t) / dx
+            guess = max(0.0, min(1.0, guess))
+        # Evaluate y at solved t
+        return 3 * y1 * guess * (1 - guess) ** 2 + \
+               3 * y2 * guess ** 2 * (1 - guess) + guess ** 3
+    return _bezier
+
+
 # Map of easing names to functions
 EASINGS = {
     "linear": linear,
@@ -82,6 +182,16 @@ EASINGS = {
     "ease_in_cubic": ease_in_cubic,
     "ease_out_cubic": ease_out_cubic,
     "ease_in_out_cubic": ease_in_out_cubic,
+    # v4 additions
+    "back_in": back_in,
+    "back_out": back_out,
+    "back_in_out": back_in_out,
+    "circ_in": circ_in,
+    "circ_out": circ_out,
+    "expo_in": expo_in,
+    "expo_out": expo_out,
+    "sine_in": sine_in,
+    "sine_out": sine_out,
 }
 
 
@@ -323,3 +433,231 @@ class Sequence:
         local_alpha = (alpha - idx * segment) / segment
         local_alpha = max(0.0, min(1.0, local_alpha))
         self.animations[idx].interpolate(local_alpha)
+
+
+class Stagger:
+    """Run animations with a staggered time offset between each.
+
+    Creates a wave/cascade effect where each animation starts ``lag``
+    fraction of the total duration after the previous one.
+
+    Usage::
+
+        bars = [Rect(20, h, x=30+i*25, y=200-h) for i, h in enumerate(data)]
+        scene.play(Stagger([FadeIn(b) for b in bars], lag=0.1), duration=2.0)
+
+    Args:
+        animations: List of Animation objects.
+        lag: Time ratio (0-1) between each animation's start.
+             E.g. lag=0.1 means each starts 10% of total duration after the previous.
+        easing: Optional easing applied to each individual animation.
+    """
+
+    def __init__(self, animations, lag: float = 0.1, easing=None):
+        self.animations = list(animations)
+        self.lag = lag
+        if easing is not None:
+            for anim in self.animations:
+                if hasattr(anim, 'easing'):
+                    anim.easing = get_easing(easing)
+
+    def interpolate(self, alpha: float):
+        n = len(self.animations)
+        if n == 0:
+            return
+        # Each animation starts at offset i * lag and has duration (1 - (n-1)*lag)
+        anim_duration = max(0.1, 1.0 - (n - 1) * self.lag)
+        for i, anim in enumerate(self.animations):
+            start = i * self.lag
+            if alpha < start:
+                local_alpha = 0.0
+            elif alpha >= start + anim_duration:
+                local_alpha = 1.0
+            else:
+                local_alpha = (alpha - start) / anim_duration
+            anim.interpolate(max(0.0, min(1.0, local_alpha)))
+
+
+# ═══════════════════════════════════════════════════════════
+#  Animation Modifiers (v4)
+# ═══════════════════════════════════════════════════════════
+
+class Delayed:
+    """Delay the start of an animation by a fraction of total duration.
+
+    Usage::
+
+        scene.play(Delayed(FadeIn(obj), delay=0.3), duration=2.0)
+
+    Args:
+        animation: The wrapped animation.
+        delay: Fraction of total duration to wait (0.0–0.9).
+    """
+
+    def __init__(self, animation, delay: float = 0.3):
+        self.animation = animation
+        self.delay = max(0.0, min(0.9, delay))
+
+    def interpolate(self, alpha: float):
+        if alpha < self.delay:
+            return
+        local = (alpha - self.delay) / (1.0 - self.delay)
+        self.animation.interpolate(max(0.0, min(1.0, local)))
+
+
+class Reversed:
+    """Play an animation in reverse (alpha goes 1→0).
+
+    Usage::
+
+        scene.play(Reversed(GrowFromPoint(obj, 240, 135)), duration=1.0)
+    """
+
+    def __init__(self, animation):
+        self.animation = animation
+
+    def interpolate(self, alpha: float):
+        self.animation.interpolate(1.0 - alpha)
+
+
+class Looped:
+    """Loop an animation multiple times within the total duration.
+
+    Usage::
+
+        scene.play(Looped(Rotate(obj, 360), count=3), duration=3.0)
+
+    Args:
+        animation: The wrapped animation.
+        count: Number of times to loop.
+    """
+
+    def __init__(self, animation, count: int = 2):
+        self.animation = animation
+        self.count = max(1, count)
+        self._prev_cycle = -1
+
+    def interpolate(self, alpha: float):
+        cycle_alpha = (alpha * self.count) % 1.0
+        current_cycle = int(alpha * self.count)
+        # Reset animation state at cycle boundaries
+        if current_cycle != self._prev_cycle and current_cycle > 0:
+            if hasattr(self.animation, '_started'):
+                self.animation._started = False
+                self.animation._completed = False
+            self._prev_cycle = current_cycle
+        # At the very end, ensure we hit 1.0
+        if alpha >= 1.0:
+            cycle_alpha = 1.0
+        self.animation.interpolate(cycle_alpha)
+
+
+# ═══════════════════════════════════════════════════════════
+#  Spring Physics Animations (v4)
+# ═══════════════════════════════════════════════════════════
+
+class SpringTo(Animation):
+    """Move an object to a target position with spring physics.
+
+    Produces natural overshoot and settle motion using a damped spring.
+
+    Usage::
+
+        scene.play(SpringTo(obj, x=240, y=135, stiffness=120, damping=10), duration=2.0)
+
+    Args:
+        stiffness: Spring constant (higher = snappier). Default 120.
+        damping: Damping factor (higher = less oscillation). Default 12.
+    """
+
+    def __init__(self, target: PObject, x: int = None, y: int = None,
+                 stiffness: float = 120.0, damping: float = 12.0, easing=linear):
+        super().__init__(target, easing=linear)  # Spring does its own easing
+        self.target_x = x
+        self.target_y = y
+        self.stiffness = stiffness
+        self.damping = damping
+        self.start_x = None
+        self.start_y = None
+
+    def _spring_value(self, t: float) -> float:
+        """Compute spring displacement at normalized time t (0→1).
+
+        Uses underdamped spring equation for natural overshoot.
+        """
+        if t >= 1.0:
+            return 1.0
+        if t <= 0.0:
+            return 0.0
+        omega = math.sqrt(self.stiffness)
+        zeta = self.damping / (2.0 * omega)
+        if zeta < 1.0:
+            # Underdamped — oscillates
+            omega_d = omega * math.sqrt(1.0 - zeta * zeta)
+            decay = math.exp(-zeta * omega * t * 3.0)
+            return 1.0 - decay * (math.cos(omega_d * t * 3.0) +
+                                   (zeta * omega / omega_d) * math.sin(omega_d * t * 3.0))
+        else:
+            # Critically/overdamped — no oscillation
+            decay = math.exp(-omega * t * 3.0)
+            return 1.0 - decay * (1.0 + omega * t * 3.0)
+
+    def on_start(self):
+        self.start_x = self.target.x
+        self.start_y = self.target.y
+        if self.target_x is None:
+            self.target_x = self.start_x
+        if self.target_y is None:
+            self.target_y = self.start_y
+
+    def update(self, alpha: float):
+        s = self._spring_value(alpha)
+        self.target.x = self.start_x + (self.target_x - self.start_x) * s
+        self.target.y = self.start_y + (self.target_y - self.start_y) * s
+
+
+class SpringScale(Animation):
+    """Scale an object with spring bounce physics.
+
+    Usage::
+
+        scene.play(SpringScale(obj, factor=1.5, stiffness=200, damping=8), duration=1.0)
+    """
+
+    def __init__(self, target: PObject, factor: float = 1.5,
+                 stiffness: float = 200.0, damping: float = 8.0, easing=linear):
+        super().__init__(target, easing=linear)
+        self.factor = factor
+        self.stiffness = stiffness
+        self.damping = damping
+        self.start_scale_x = None
+        self.start_scale_y = None
+
+    def _spring_value(self, t: float) -> float:
+        if t >= 1.0:
+            return 1.0
+        if t <= 0.0:
+            return 0.0
+        omega = math.sqrt(self.stiffness)
+        zeta = self.damping / (2.0 * omega)
+        if zeta < 1.0:
+            omega_d = omega * math.sqrt(1.0 - zeta * zeta)
+            decay = math.exp(-zeta * omega * t * 3.0)
+            return 1.0 - decay * (math.cos(omega_d * t * 3.0) +
+                                   (zeta * omega / omega_d) * math.sin(omega_d * t * 3.0))
+        else:
+            decay = math.exp(-omega * t * 3.0)
+            return 1.0 - decay * (1.0 + omega * t * 3.0)
+
+    def on_start(self):
+        self.start_scale_x = self.target.scale_x
+        self.start_scale_y = self.target.scale_y
+
+    def update(self, alpha: float):
+        s = self._spring_value(alpha)
+        current_factor = 1.0 + (self.factor - 1.0) * s
+        self.target.scale_x = self.start_scale_x * current_factor
+        self.target.scale_y = self.start_scale_y * current_factor
+        if hasattr(self.target, '_orig_width'):
+            self.target.width = max(1, int(self.target._orig_width * self.target.scale_x))
+            self.target.height = max(1, int(self.target._orig_height * self.target.scale_y))
