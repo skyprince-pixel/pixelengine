@@ -256,3 +256,63 @@ class Sprite(PObject):
         frames = len(self._frames) if self._frames else 1
         state = f", state={self._current_state}" if self._current_state else ""
         return f"Sprite({self.width}×{self.height}, frames={frames}{state}, at ({self.x},{self.y}))"
+
+
+class ImageSprite(Sprite):
+    """An image sprite that can be scaled and quantized to a retro palette.
+
+    Usage::
+    
+        from pixelengine.color import PICO8
+        photo = ImageSprite("assets/einstein.jpg", x=135, y=100, width=150, palette=PICO8)
+        scene.add(photo)
+
+    Args:
+        path: Path to the image file.
+        x, y: Position coordinates.
+        width: Desired width in pixels (height is auto-calculated to maintain aspect ratio).
+        palette: Optional list of HEX color strings to quantize the image to (e.g., PICO8).
+    """
+
+    def __init__(self, path: str, x: int = 0, y: int = 0, width: int = None, palette: list = None):
+        img = Image.open(path).convert("RGBA")
+        
+        if width is not None and width != img.width:
+            aspect = img.height / img.width
+            new_h = int(width * aspect)
+            # Use LANCZOS for high-quality downscaling
+            img = img.resize((width, new_h), Image.Resampling.LANCZOS)
+            
+        if palette is not None:
+            # Create a 256-color palette image using the provided hex list
+            pal_img = Image.new("P", (1, 1))
+            flat_palette = []
+            
+            if isinstance(palette, dict):
+                colors = list(palette.values())
+            else:
+                colors = list(palette)
+                
+            for hex_color in colors[:256]:
+                r, g, b, _ = parse_color(hex_color)
+                flat_palette.extend([r, g, b])
+            
+            # Pad to 256 colors (768 ints)
+            while len(flat_palette) < 768:
+                flat_palette.extend([0, 0, 0])
+                
+            pal_img.putpalette(flat_palette)
+            
+            # Separate alpha channel before quantizing
+            alpha = img.split()[3]
+            img_rgb = img.convert("RGB")
+            
+            # Quantize to the specific palette with dithering
+            quantized = img_rgb.quantize(palette=pal_img, dither=Image.Dither.FLOYDSTEINBERG)
+            img = quantized.convert("RGBA")
+            
+            # Restore original alpha
+            img.putalpha(alpha)
+                
+        super().__init__(img, x=x, y=y)
+

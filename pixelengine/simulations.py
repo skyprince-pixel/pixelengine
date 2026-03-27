@@ -471,3 +471,136 @@ class FluidParticles(PObject):
         for dy in range(self.height_area + 1):
             canvas.set_pixel(bx, by + dy, oc)
             canvas.set_pixel(bx + self.width_area, by + dy, oc)
+
+
+class NetworkGraph(PObject):
+    """Force-directed network graph simulation.
+
+    Nodes repel each other while connecting edges pull them together like springs,
+    automatically arranging the graph into an aesthetically pleasing layout.
+
+    Usage::
+
+        graph = NetworkGraph(x=135, y=240)
+        graph.add_node("A", label="AI", color="#FF004D")
+        graph.add_node("B", label="ML", color="#29ADFF")
+        graph.add_edge("A", "B")
+        scene.add(graph)
+    """
+
+    def __init__(self, x: int = 135, y: int = 240, node_radius: int = 6,
+                 repulsion: float = 2000.0, spring_k: float = 3.0, 
+                 spring_length: float = 50.0, damping: float = 0.85):
+        super().__init__(x=x, y=y)
+        self.node_radius = node_radius
+        self.repulsion = repulsion
+        self.spring_k = spring_k
+        self.spring_length = spring_length
+        self.damping = damping
+        self.z_index = 50
+        
+        self.nodes = {}  # dict of node_id -> dict
+        self.edges = []  # list of (node_id1, node_id2)
+        self._fps: int = 24  # Set by Scene
+
+    def add_node(self, node_id: str, label: str = "", color: str = "#29ADFF", radius: int = None):
+        """Add a node to the graph."""
+        self.nodes[node_id] = {
+            'x': self.x + random.uniform(-20, 20),
+            'y': self.y + random.uniform(-20, 20),
+            'vx': 0.0, 'vy': 0.0,
+            'label': label,
+            'color': parse_color(color),
+            'radius': radius if radius is not None else self.node_radius
+        }
+
+    def add_edge(self, id1: str, id2: str):
+        """Connect two nodes with a spring."""
+        if id1 in self.nodes and id2 in self.nodes:
+            self.edges.append((id1, id2))
+
+    def render(self, canvas):
+        if not self.visible:
+            return
+            
+        dt = 1.0 / self._fps
+        
+        # 1. Repulsion between all nodes
+        node_ids = list(self.nodes.keys())
+        for i in range(len(node_ids)):
+            ni = self.nodes[node_ids[i]]
+            for j in range(i + 1, len(node_ids)):
+                nj = self.nodes[node_ids[j]]
+                dx = nj['x'] - ni['x']
+                dy = nj['y'] - ni['y']
+                dist_sq = dx * dx + dy * dy
+                if dist_sq < 0.1:
+                    dx, dy = random.uniform(-1, 1), random.uniform(-1, 1)
+                    dist_sq = dx * dx + dy * dy
+                
+                # Inverse square repulsion
+                force = self.repulsion / dist_sq
+                dist = dist_sq ** 0.5
+                fx, fy = (dx / dist) * force, (dy / dist) * force
+                
+                ni['vx'] -= fx * dt
+                ni['vy'] -= fy * dt
+                nj['vx'] += fx * dt
+                nj['vy'] += fy * dt
+
+        # 2. Spring attraction for edges
+        for id1, id2 in self.edges:
+            n1 = self.nodes[id1]
+            n2 = self.nodes[id2]
+            dx = n2['x'] - n1['x']
+            dy = n2['y'] - n1['y']
+            dist = (dx * dx + dy * dy) ** 0.5
+            if dist > 0.1:
+                diff = dist - self.spring_length
+                force = self.spring_k * diff
+                fx, fy = (dx / dist) * force, (dy / dist) * force
+                n1['vx'] += fx * dt
+                n1['vy'] += fy * dt
+                n2['vx'] -= fx * dt
+                n2['vy'] -= fy * dt
+                
+        # 3. Center gravity (pull everything to center) & Integration
+        for n in self.nodes.values():
+            # Pull to center anchor to keep graph on screen
+            cx_pull = self.x - n['x']
+            cy_pull = self.y - n['y']
+            n['vx'] += cx_pull * 0.5 * dt
+            n['vy'] += cy_pull * 0.5 * dt
+            
+            n['vx'] *= self.damping
+            n['vy'] *= self.damping
+            
+            n['x'] += n['vx'] * dt
+            n['y'] += n['vy'] * dt
+
+        edge_color = (130, 130, 130, int(255 * self.opacity))
+
+        # Draw edges
+        for id1, id2 in self.edges:
+            n1 = self.nodes[id1]
+            n2 = self.nodes[id2]
+            Pendulum._draw_line(canvas, int(n1['x']), int(n1['y']), int(n2['x']), int(n2['y']), edge_color)
+
+        # Draw nodes & labels
+        from pixelengine.text import PixelText
+        for n in self.nodes.values():
+            r = n['radius']
+            px, py = int(n['x']), int(n['y'])
+            r_sq = r * r
+            color = (*n['color'][:3], int(n['color'][3] * self.opacity))
+            
+            for dy in range(-r, r + 1):
+                for dx in range(-r, r + 1):
+                    if dx * dx + dy * dy <= r_sq:
+                        canvas.set_pixel(px + dx, py + dy, color)
+                        
+            if n['label']:
+                pt = PixelText(n['label'], x=px, y=py - r - 8, align="center")
+                pt.opacity = self.opacity
+                pt.render(canvas)
+

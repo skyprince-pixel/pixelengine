@@ -4,6 +4,9 @@ __version__ = "0.5.0"
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
 
+# ── Layout Templates ───────────────────────────────────────
+from pixelengine.layout import Layout, Zone
+
 # ── Color System ────────────────────────────────────────────
 from pixelengine.color import (
     parse_color,
@@ -101,6 +104,8 @@ from pixelengine.textanim import (
     PerWord,
     ScrambleReveal,
     TypeWriterPro,
+    DynamicCaption,
+    DynamicCaptionTrack,
 )
 
 # ── Math Objects ────────────────────────────────────────────
@@ -117,7 +122,7 @@ from pixelengine.mathobjects import (
 from pixelengine.text import PixelText, TypeWriter
 
 # ── Sprite ──────────────────────────────────────────────────
-from pixelengine.sprite import Sprite
+from pixelengine.sprite import Sprite, ImageSprite
 
 # ── Camera ──────────────────────────────────────────────
 from pixelengine.camera import Camera, CameraPan, CameraZoom, CameraCenterOn
@@ -209,6 +214,7 @@ from pixelengine.simulations import (
     OrbitalSystem,
     Rope,
     FluidParticles,
+    NetworkGraph,
 )
 
 # ── Sound ───────────────────────────────────────────────────
@@ -221,6 +227,8 @@ from pixelengine.scene import Scene
 __all__ = [
     # Core
     "PixelConfig", "Scene", "PObject",
+    # Layout
+    "Layout", "Zone",
     # Shapes
     "Rect", "Circle", "Line", "Triangle", "Polygon",
     # Animation
@@ -250,12 +258,13 @@ __all__ = [
     "Keyframe", "KeyframeTrack", "KeyframeAnimation",
     # v4 Text Animation
     "PerCharacter", "PerWord", "ScrambleReveal", "TypeWriterPro",
+    "DynamicCaption", "DynamicCaptionTrack",
     # Math Objects
     "ValueTracker", "NumberLine", "BarChart", "Axes", "Graph", "Dot",
     # Text
     "PixelText", "TypeWriter",
     # Sprite
-    "Sprite",
+    "Sprite", "ImageSprite",
     # Camera
     "Camera", "CameraPan", "CameraZoom", "CameraCenterOn",
     # Lighting
@@ -288,7 +297,7 @@ __all__ = [
     # Physics / Simulation
     "PhysicsBody", "PhysicsWorld",
     "CollisionCallback", "StaticBody", "Bounds",
-    "Pendulum", "Spring", "OrbitalSystem", "Rope", "FluidParticles",
+    "Pendulum", "Spring", "OrbitalSystem", "Rope", "FluidParticles", "NetworkGraph",
     # Sound
     "SoundFX", "SoundTimeline", "VoiceOver",
     # Color

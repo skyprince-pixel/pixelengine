@@ -59,6 +59,35 @@ if __name__ == "__main__":
 | `PixelConfig.full_hd()` | 480×270 | 1920×1080 | Full HD 1080p |
 | `PixelConfig.qhd()` | 640×360 | 2560×1440 | QHD 2K |
 
+### Layout Templates
+
+Use `Layout` for consistent positioning across videos. Never guess coordinates.
+
+```python
+from pixelengine.layout import Layout
+
+L = Layout.portrait()  # 270×480
+
+# Named zones — each returns Zone(x, y, width, height)
+L.TITLE_ZONE      # Top area for titles
+L.SUBTITLE_ZONE   # Below title
+L.MAIN_ZONE       # Center stage
+L.LOWER_THIRD     # Lower-third captions
+L.FOOTER_ZONE     # Bottom strip
+
+# Safe margins
+L.SAFE_LEFT, L.SAFE_RIGHT, L.SAFE_TOP, L.SAFE_BOTTOM
+
+# Helpers
+L.center()              # (135, 240)
+L.full_bg()             # (270, 480, 135, 240) for Rect
+L.grid(rows, cols)      # Grid positions in MAIN_ZONE
+L.stack(n)              # Vertical stack in MAIN_ZONE
+L.horizontal(n)         # Horizontal row in MAIN_ZONE
+```
+
+Available presets: `Layout.portrait()`, `Layout.landscape()`, `Layout.retro()`, `Layout.square()`.
+
 ---
 
 ## 2. Shapes & Primitives
@@ -331,7 +360,36 @@ See v2 docs. `PatternTexture`, `Cube3D`, `Pendulum`, `PhysicsWorld`, etc.
 
 ---
 
-## 15. Outputs & File Organization
+## 15-17. New v0.6.0 Features
+
+### 15. Auto-Captions (DynamicKaraoke)
+Automatically split and animate words in sync with `VoiceOver`.
+```python
+captions = DynamicCaption("Hello world!", x=L.LOWER_THIRD.x, y=L.LOWER_THIRD.y)
+scene.add(captions)
+scene.play(captions.track(), duration=2.0)
+```
+
+### 16. Image Importer with Palette Quantization
+Bring real world photos into the pixel art aesthetic.
+```python
+from pixelengine.color import PICO8
+photo = ImageSprite("dog.jpg", x=L.MAIN_ZONE.x, y=L.MAIN_ZONE.y, width=150, palette=PICO8)
+scene.add(photo)
+```
+
+### 17. Physics-Based Mind Maps
+```python
+graph = NetworkGraph(x=L.MAIN_ZONE.x, y=L.MAIN_ZONE.y)
+graph.add_node("A", label="AI")
+graph.add_node("B", label="ML")
+graph.add_edge("A", "B")
+scene.add(graph)
+```
+
+---
+
+## 18. Outputs & File Organization
 
 `scene.render()` auto-organizes to `outputs/<script>/`.
 
@@ -391,3 +449,9 @@ See v2 docs. `PatternTexture`, `Cube3D`, `Pendulum`, `PhysicsWorld`, etc.
 11. **Text Animations (v4)**: `PerCharacter(text, "fade_in", lag=0.05)` for staggered text. `ScrambleReveal` for Matrix-style.
 12. **Reactive Links (v4)**: `obj.add_updater(Link(source))` for following. `ReactTo(source, fn)` for custom reactions.
 13. **Performance (v0.5.0)**: Don't hesitate to use dense particle effects, dynamic lighting, and real rigid-body `PhysicsWorld` + `PhysicsBody` dynamics. PyAV and Pymunk handle it effortlessly.
+14. **Layout (v0.5.0)**: ALWAYS use `Layout.portrait()` or `Layout.landscape()` for positioning. Access named zones via `L.TITLE_ZONE`, `L.MAIN_ZONE`, `L.LOWER_THIRD`, etc. Never hardcode coordinates.
+   ```python
+   from pixelengine.layout import Layout
+   L = Layout.portrait()
+   title = PixelText("HELLO", x=L.TITLE_ZONE.x, y=L.TITLE_ZONE.y, align="center")
+   ```

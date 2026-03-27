@@ -283,3 +283,156 @@ class TypeWriterPro:
         if alpha >= 1.0:
             self.text_obj.text = text
             self.text_obj.max_chars = n
+
+
+# ═══════════════════════════════════════════════════════════
+#  Auto-Captions (Dynamic Karaoke)
+# ═══════════════════════════════════════════════════════════
+
+class DynamicCaption(PObject):
+    """A container for word-by-word karaoke captions.
+    
+    Internally manages multiple PixelText objects for each word, wrapping them
+    to fit within `max_width`.
+
+    Usage::
+    
+        captions = DynamicCaption("This is an automatic caption!", x=135, y=350)
+        scene.add(captions)
+        scene.play(captions.track(), duration=audio_duration)
+    """
+
+    def __init__(self, text: str, x: int = 0, y: int = 0, max_width: int = 220,
+                 base_color: str = "#FFFFFF", active_color: str = "#FFEC27",
+                 base_scale: int = 1, active_y_pop: int = 4):
+        super().__init__(x=x, y=y)
+        from pixelengine.color import parse_color
+        from pixelengine.text import PixelText, GLYPH_WIDTH, GLYPH_SPACING, GLYPH_HEIGHT, LINE_SPACING
+        
+        self.base_color = parse_color(base_color)
+        self.active_color = parse_color(active_color)
+        self.base_scale = base_scale
+        self.active_y_pop = active_y_pop
+        self.active_word_idx = -1
+        self.z_index = 100
+
+        words = text.split()
+        self.word_objs = []
+        self.word_weights = []
+        
+        # Calculate weights based on character lengths (for timing estimation)
+        total_chars = sum(len(w) for w in words)
+        for w in words:
+            self.word_weights.append((len(w) + 1.0) / (total_chars + len(words)))
+
+        # Layout words with wrapping
+        lines = []
+        current_line = []
+        current_w = 0
+        space_w = (GLYPH_WIDTH + GLYPH_SPACING) * base_scale
+        
+        for w in words:
+            w_px = len(w) * (GLYPH_WIDTH + GLYPH_SPACING) * base_scale
+            if current_line and current_w + w_px > max_width:
+                lines.append((current_line, current_w))
+                current_line = [w]
+                current_w = w_px + space_w
+            else:
+                current_line.append(w)
+                current_w += w_px + space_w
+        if current_line:
+            lines.append((current_line, current_w))
+
+        # Position PixelText objects centered horizontally
+        line_h = (GLYPH_HEIGHT + LINE_SPACING + 2) * base_scale
+        total_h = len(lines) * line_h + active_y_pop
+        start_y = y - total_h // 2 + active_y_pop
+        max_line_w = max(lw for _, lw in lines) if lines else max_width
+
+        from pixelengine.shapes import Rect
+        w_bg = max_line_w + 30
+        h_bg = total_h + 20
+        self.bg_rect = Rect(
+            width=w_bg,
+            height=h_bg,
+            x=x - w_bg // 2,
+            y=y - h_bg // 2,
+            color="#000000"
+        )
+        self.bg_rect.opacity = 0.7
+
+        self.word_objs = []
+        for i, (line_words, line_w) in enumerate(lines):
+            line_y = start_y + i * line_h
+            # Remove trailing space from line_w
+            line_w -= space_w
+            curr_x = x - line_w // 2
+
+            for w in line_words:
+                pt = PixelText(w, x=curr_x, y=line_y, color=self.base_color, scale=base_scale)
+                self.word_objs.append(pt)
+                curr_x += len(w) * (GLYPH_WIDTH + GLYPH_SPACING) * base_scale + space_w
+
+    def set_active_word(self, idx: int):
+        self.active_word_idx = idx
+        for i, pt in enumerate(self.word_objs):
+            if i == idx:
+                pt.color = self.active_color
+                if not pt.shadow:
+                    pt.y -= self.active_y_pop  # Pop up slightly
+                    pt.shadow = True
+            else:
+                pt.color = self.base_color
+                # Reset Y jump
+                if pt.shadow:
+                    pt.y += self.active_y_pop
+                pt.shadow = False
+                
+    def track(self, easing=None):
+        """Return the animation track for this caption."""
+        return DynamicCaptionTrack(self, easing)
+
+    def render(self, canvas):
+        if not self.visible:
+            return
+            
+        self.bg_rect.opacity = self.opacity * 0.7
+        self.bg_rect.render(canvas)
+        
+        for idx, pt in enumerate(self.word_objs):
+            # Render all words up to the active one + 1 for lookahead
+            if idx <= self.active_word_idx + 1:
+                pt.opacity = self.opacity
+                pt.render(canvas)
+
+
+class DynamicCaptionTrack:
+    """Animation track that syncs a DynamicCaption to audio duration."""
+    
+    def __init__(self, caption: DynamicCaption, easing=None):
+        self.caption = caption
+        self.easing = get_easing(easing) if easing else linear
+        
+        # Build cumulative normalized timing bounds
+        self.bounds = []
+        curr = 0.0
+        for w in self.caption.word_weights:
+            self.bounds.append((curr, curr + w))
+            curr += w
+
+        self._started = False
+
+    def interpolate(self, alpha: float):
+        if not self._started:
+            self._started = True
+            
+        alpha = self.easing(max(0.0, min(1.0, alpha)))
+        
+        active_idx = len(self.bounds) - 1
+        for i, (start, end) in enumerate(self.bounds):
+            if alpha < end:
+                active_idx = i
+                break
+                
+        self.caption.set_active_word(active_idx)
+
