@@ -1,4 +1,4 @@
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -79,6 +79,7 @@ from pixelengine.transform import (
     MorphTo,
     ReplacementTransform,
     TransformMatchingPoints,
+    VMorph,
 )
 
 # ── Path Animation (v4) ────────────────────────────────────
@@ -144,10 +145,24 @@ from pixelengine.camerafx import (
     CameraFXPipeline,
 )
 
-# ── Vector Graphics (v4) ────────────────────────────────────
+# ── Vector Graphics (v0.6.0) ───────────────────────────────
 from pixelengine.vector import (
     VectorObject, SVGMobject,
     VPath, VLine, VCircle, VRect, VPolygon, VArrow, Vector,
+)
+
+# ── MathTex (v0.7.0) ───────────────────────────────────────
+from pixelengine.mathtex import MathTex
+
+# ── Scene Composition (v0.7.0) ─────────────────────────────
+from pixelengine.compose import Compose
+
+# ── Terrain (v0.7.0) ───────────────────────────────────────
+from pixelengine.terrain import Terrain
+
+# ── Shaders (v0.7.0) ───────────────────────────────────────
+from pixelengine.shaders import (
+    PixelShader, CRTScanlines, Ripple, HeatShimmer, Pixelate, ColorGrade,
 )
 
 # ── Background ──────────────────────────────────────────────
@@ -255,7 +270,7 @@ __all__ = [
     "GrowFromPoint", "GrowFromEdge", "DrawBorderThenFill",
     "Create", "Uncreate", "ShowPassingFlash", "GrowArrow",
     # Transform
-    "MorphTo", "ReplacementTransform", "TransformMatchingPoints",
+    "MorphTo", "ReplacementTransform", "TransformMatchingPoints", "VMorph",
     # v4 Path Animation
     "BezierPath", "QuadraticBezierPath", "CircularPath",
     "LinearPath", "FollowPath",
@@ -269,6 +284,9 @@ __all__ = [
     # Vector
     "VectorObject", "SVGMobject",
     "VPath", "VLine", "VCircle", "VRect", "VPolygon", "VArrow", "Vector",
+    # v0.7.0
+    "MathTex", "Compose", "Terrain",
+    "PixelShader", "CRTScanlines", "Ripple", "HeatShimmer", "Pixelate", "ColorGrade",
     # Text
     "PixelText", "TypeWriter",
     # Sprite

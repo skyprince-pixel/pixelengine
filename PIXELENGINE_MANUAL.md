@@ -25,9 +25,8 @@ from pixelengine import Scene, PixelConfig, Rect, PixelText, TypeWriter
 
 class MyAnimation(Scene):
     def construct(self):
-        # 1. Place static object
-        bg = Rect(width=480, height=270, color="#1D2B53")
-        self.add(bg)
+        # 1. Set background colour (covers entire canvas)
+        self.set_background("#1D2B53")
 
         # 2. Add some text
         text = PixelText("HELLO GALAXY", x=240, y=135, align="center")

@@ -211,3 +211,196 @@ class TransformMatchingPoints(Animation):
         b = int(self.src_color[2] + (self.dst_color[2] - self.src_color[2]) * alpha)
         a = int(self.src_color[3] + (self.dst_color[3] - self.src_color[3]) * alpha)
         self.target.color = (r, g, b, a)
+
+
+class VMorph(Animation):
+    """Morph one VectorObject into another by interpolating sampled path points.
+
+    Samples N points along both source and target SVG paths, then
+    interpolates between corresponding points each frame.  Also blends
+    stroke colour, fill colour, width, and opacity.
+
+    Both source and target must be ``VectorObject`` subclasses.
+
+    Usage::
+
+        from pixelengine import VMorph, VCircle, VRect
+
+        circle = VCircle(radius=30, cx=240, cy=135, color="#00E436")
+        rect = VRect(width=60, height=60, x=210, y=105, color="#FF004D")
+        scene.add(circle)
+        scene.play(VMorph(circle, rect), duration=2.0)
+    """
+
+    def __init__(self, source, target_shape, n_samples: int = 100, easing=None):
+        from pixelengine.animation import ease_in_out
+        super().__init__(source, easing or ease_in_out)
+        self.target_shape = target_shape
+        self.n_samples = n_samples
+        # Captured on start
+        self.src_points = None
+        self.dst_points = None
+        self.src_color = None
+        self.dst_color = None
+        self.src_fill = None
+        self.dst_fill = None
+        self.src_stroke_width = None
+        self.dst_stroke_width = None
+        self.src_opacity = None
+        self.dst_opacity = None
+
+    def _sample_paths(self, vobj, n):
+        """Sample n points from all paths of a VectorObject."""
+        from pixelengine.vector import VectorObject
+        points = []
+        if not isinstance(vobj, VectorObject) or not vobj.paths:
+            # Fallback: bounding box corners
+            bb = getattr(vobj, 'get_bounding_box', None)
+            if bb:
+                b = bb()
+                cx, cy = (b[0]+b[2])/2, (b[1]+b[3])/2
+                return [(cx, cy)] * n
+            return [(vobj.x, vobj.y)] * n
+
+        # Collect all points across all paths
+        for pdata in vobj.paths:
+            path = pdata["path"]
+            length = path.length()
+            if length == 0:
+                continue
+            path_samples = max(2, int(n * length /
+                                       max(1, sum(p["path"].length()
+                                                  for p in vobj.paths
+                                                  if p["path"].length() > 0))))
+            sx, sy = vobj.scale_x, vobj.scale_y
+            for i in range(path_samples):
+                t = i / max(1, path_samples - 1)
+                try:
+                    pt = path.point(t)
+                    px = vobj.x + pt.x * sx
+                    py = vobj.y + pt.y * sy
+                    points.append((px, py))
+                except Exception:
+                    pass
+
+        if not points:
+            return [(vobj.x, vobj.y)] * n
+
+        # Resample to exactly n points
+        if len(points) < n:
+            # Interpolate linearly
+            import numpy as _np
+            xs = _np.array([p[0] for p in points])
+            ys = _np.array([p[1] for p in points])
+            t_old = _np.linspace(0, 1, len(points))
+            t_new = _np.linspace(0, 1, n)
+            new_xs = _np.interp(t_new, t_old, xs)
+            new_ys = _np.interp(t_new, t_old, ys)
+            return list(zip(new_xs.tolist(), new_ys.tolist()))
+        elif len(points) > n:
+            # Subsample uniformly
+            indices = [int(i * (len(points) - 1) / (n - 1)) for i in range(n)]
+            return [points[i] for i in indices]
+        return points
+
+    def on_start(self):
+        self.src_points = self._sample_paths(self.target, self.n_samples)
+        self.dst_points = self._sample_paths(self.target_shape, self.n_samples)
+        self.src_color = self.target.color
+        self.dst_color = self.target_shape.color
+        self.src_fill = getattr(self.target, 'fill_color', None)
+        self.dst_fill = getattr(self.target_shape, 'fill_color', None)
+        self.src_stroke_width = getattr(self.target, 'stroke_width', 1.0)
+        self.dst_stroke_width = getattr(self.target_shape, 'stroke_width', 1.0)
+        self.src_opacity = self.target.opacity
+        self.dst_opacity = self.target_shape.opacity
+        # Store original render method
+        self.target._vmorph_src = self.src_points
+        self.target._vmorph_dst = self.dst_points
+        self.target._vmorph_alpha = 0.0
+        self.target._original_render = self.target.render
+        self.target.render = self._morph_render
+
+    def update(self, alpha: float):
+        self.target._vmorph_alpha = alpha
+        # Interpolate color
+        r = int(self.src_color[0] + (self.dst_color[0] - self.src_color[0]) * alpha)
+        g = int(self.src_color[1] + (self.dst_color[1] - self.src_color[1]) * alpha)
+        b = int(self.src_color[2] + (self.dst_color[2] - self.src_color[2]) * alpha)
+        a = int(self.src_color[3] + (self.dst_color[3] - self.src_color[3]) * alpha)
+        self.target.color = (r, g, b, a)
+        # Interpolate opacity
+        self.target.opacity = self.src_opacity + (self.dst_opacity - self.src_opacity) * alpha
+        # Interpolate stroke width
+        if hasattr(self.target, 'stroke_width'):
+            self.target.stroke_width = (self.src_stroke_width +
+                                        (self.dst_stroke_width - self.src_stroke_width) * alpha)
+
+    def _morph_render(self, canvas):
+        """Custom render that draws interpolated points."""
+        from PIL import Image, ImageDraw
+        if not self.target.visible:
+            return
+
+        alpha = self.target._vmorph_alpha
+        src = self.target._vmorph_src
+        dst = self.target._vmorph_dst
+
+        # Interpolate all points
+        pts = []
+        for (sx, sy), (dx, dy) in zip(src, dst):
+            px = sx + (dx - sx) * alpha
+            py = sy + (dy - sy) * alpha
+            pts.append((px, py))
+
+        if len(pts) < 2:
+            return
+
+        img = Image.new("RGBA", (canvas.width, canvas.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        color = self.target.get_render_color()
+        stroke = (*color[:3], int(color[3] * self.target.opacity))
+        thickness = max(1, int(getattr(self.target, 'stroke_width', 1.0)))
+
+        # Draw fill if available
+        fill_color = None
+        if self.src_fill and self.dst_fill:
+            sf, df = self.src_fill, self.dst_fill
+            fr = int(sf[0] + (df[0] - sf[0]) * alpha)
+            fg = int(sf[1] + (df[1] - sf[1]) * alpha)
+            fb = int(sf[2] + (df[2] - sf[2]) * alpha)
+            fa = int(sf[3] + (df[3] - sf[3]) * alpha)
+            fill_color = (fr, fg, fb, int(fa * self.target.opacity))
+
+        if fill_color and len(pts) > 2:
+            draw.polygon(pts, fill=fill_color)
+
+        # Draw stroke
+        draw.line(pts, fill=stroke, width=thickness, joint="curve")
+
+        canvas.blit(img, 0, 0)
+
+    def on_complete(self):
+        # Restore original render and copy target's paths
+        if hasattr(self.target, '_original_render'):
+            self.target.render = self.target._original_render
+            del self.target._original_render
+        # Copy target shape's paths if both are VectorObjects
+        from pixelengine.vector import VectorObject
+        if isinstance(self.target, VectorObject) and isinstance(self.target_shape, VectorObject):
+            self.target.clear_paths()
+            for pdata in self.target_shape.paths:
+                self.target.add_path(pdata["path"], stroke=pdata["stroke"],
+                                     fill=pdata["fill"], stroke_width=pdata["stroke_width"])
+            self.target.x = self.target_shape.x
+            self.target.y = self.target_shape.y
+            self.target.scale_x = self.target_shape.scale_x
+            self.target.scale_y = self.target_shape.scale_y
+        if hasattr(self.target, 'fill_color'):
+            self.target.fill_color = self.dst_fill
+        # Cleanup
+        for attr in ('_vmorph_src', '_vmorph_dst', '_vmorph_alpha'):
+            if hasattr(self.target, attr):
+                delattr(self.target, attr)
+

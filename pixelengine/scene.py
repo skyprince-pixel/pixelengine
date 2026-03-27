@@ -81,6 +81,27 @@ class Scene:
                 self._objects.remove(obj)
         return self
 
+    def set_background(self, color: str) -> "Scene":
+        """Set the canvas background colour.
+
+        This is the recommended way to set a solid background — it covers
+        the entire canvas automatically, so you never need to create a
+        full-screen ``Rect``.
+
+        Args:
+            color: Hex colour string (e.g. ``"#1D2B53"``).
+
+        Usage::
+
+            self.set_background("#1D2B53")  # Dark navy
+        """
+        from pixelengine.color import parse_color
+        self.canvas.background = parse_color(color)
+        import numpy as np
+        self.canvas._bg_array[:, :] = self.canvas.background
+        return self
+
+
     # ── Lighting ────────────────────────────────────────────
 
     def add_light(self, *lights) -> "Scene":
