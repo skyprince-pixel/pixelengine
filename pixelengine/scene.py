@@ -40,7 +40,8 @@ class Scene:
         )
         self.camera = Camera(self.config.canvas_width, self.config.canvas_height)
         self._objects: list = []
-        self._frames: list = []
+        self._frame_count: int = 0
+        self._renderer: Renderer = None
 
         # Sound
         self._sound_timeline = SoundTimeline()
@@ -281,7 +282,7 @@ class Scene:
 
         # Progress bar (updated every frame during construct)
         if hasattr(self, '_render_start_time'):
-            frame_count = len(self._frames) + 1
+            frame_count = self._frame_count + 1
             elapsed = time.time() - self._render_start_time
             fps = frame_count / elapsed if elapsed > 0 else 0
             bar_w = 30
@@ -349,7 +350,9 @@ class Scene:
         if self._camera_fx.count > 0:
             frame = self._camera_fx.apply(frame)
 
-        self._frames.append(frame)
+        if hasattr(self, '_renderer') and self._renderer:
+            self._renderer.add_frame(frame)
+        self._frame_count += 1
 
     def _render_object(self, obj):
         """Render a single object, applying per-object quality if needed."""
@@ -421,31 +424,15 @@ class Scene:
         print(f"  FPS: {self.config.fps}")
         print(f"  Auto-sound: {'on' if self.auto_sound else 'off'}")
 
-        self._frames = []
+        self._frame_count = 0
         self._current_time = 0
         self._sound_timeline = SoundTimeline()
         self._last_tw_char_count = {}
         self._render_start_time = time.time()
-        self.construct()
-        # Clear the rendering spinner line
-        sys.stdout.write("\r" + " " * 80 + "\r")
-        sys.stdout.flush()
 
-        total_seconds = len(self._frames) / self.config.fps
-        sound_count = self._sound_timeline.event_count
-        print(f"[PixelEngine] Captured {len(self._frames)} frames ({total_seconds:.1f}s)")
-        print(f"  Sound events: {sound_count}")
-
-        if not self._frames:
-            print("[PixelEngine] Warning: No frames captured!")
-            return
-
-        renderer = Renderer(self.config)
-
-        # ── Organize output files ──
+        # Determine paths
         if output_path is None:
             import inspect
-            # Find the script that defined this scene subclass
             module = sys.modules.get(self.__class__.__module__)
             script_path = getattr(module, '__file__', sys.argv[0])
             script_name = os.path.splitext(os.path.basename(script_path))[0]
@@ -467,37 +454,50 @@ class Scene:
             output_path = os.path.join(video_dir, f"{scene_name}.mp4")
             audio_path = os.path.join(audio_dir, f"{scene_name}.wav")
 
-            # Backup the script
             if os.path.exists(script_path):
                 shutil.copy2(script_path, os.path.join(script_dir, os.path.basename(script_path)))
         else:
-            # If an explicit path is given, we just use a temp dir for audio later
             audio_path = None
 
-        if sound_count > 0:
-            if audio_path is None:
-                # Use temp directory for manual output_path
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    tmp_video = os.path.join(tmpdir, "video_only.mp4")
+        self._renderer = Renderer(self.config)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_video = os.path.join(tmpdir, "video_only.mp4")
+            self._renderer.open(tmp_video, self.config.output_width, self.config.output_height)
+            
+            # RUN CONSTRUCT AND STREAM FRAMES
+            self.construct()
+            
+            # Close renderer after all frames
+            self._renderer.close()
+
+            sys.stdout.write("\r" + " " * 80 + "\r")
+            sys.stdout.flush()
+
+            total_seconds = self._frame_count / self.config.fps
+            sound_count = self._sound_timeline.event_count
+            print(f"[PixelEngine] Captured {self._frame_count} frames ({total_seconds:.1f}s)")
+            print(f"  Sound events: {sound_count}")
+
+            if self._frame_count == 0:
+                print("[PixelEngine] Warning: No frames captured!")
+                return
+
+            if sound_count > 0:
+                if audio_path is None:
                     tmp_audio = os.path.join(tmpdir, "audio.wav")
-                    renderer.encode(self._frames, tmp_video)
                     self._sound_timeline.save_wav(tmp_audio, total_seconds)
                     mux_audio_video(tmp_video, tmp_audio, output_path)
-            else:
-                # Use the organized directories
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    tmp_video = os.path.join(tmpdir, "video_only.mp4")
-                    renderer.encode(self._frames, tmp_video)
+                else:
                     self._sound_timeline.save_wav(audio_path, total_seconds)
                     mux_audio_video(tmp_video, audio_path, output_path)
-            
-            size = os.path.getsize(output_path) / 1024
-            print(f"  Output: {output_path} ({size:.1f} KB) [video+audio]")
-            if audio_path:
-                print(f"  Audio:  {audio_path}")
-        else:
-            renderer.encode(self._frames, output_path)
-            size = os.path.getsize(output_path) / 1024
-            print(f"  Output: {output_path} ({size:.1f} KB) [video]")
+                
+                size = os.path.getsize(output_path) / 1024
+                print(f"  Output: {output_path} ({size:.1f} KB) [video+audio]")
+                if audio_path:
+                    print(f"  Audio:  {audio_path}")
+            else:
+                shutil.move(tmp_video, output_path)
+                size = os.path.getsize(output_path) / 1024
+                print(f"  Output: {output_path} ({size:.1f} KB) [video]")
 
         print(f"[PixelEngine] ✓ Video saved to: {output_path}")

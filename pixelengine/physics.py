@@ -299,9 +299,25 @@ class PhysicsWorld:
         n = len(self.bodies)
         for i in range(n):
             for j in range(i + 1, n):
-                a, b = self.bodies[i], self.bodies[j]
+                a = self.bodies[i]
+                b = self.bodies[j]
                 if not a.active or not b.active:
                     continue
+                
+                # AABB Pre-check (Fast path avoidance)
+                ax1 = a.x
+                ay1 = a.y
+                aw = a._width or (a._radius or 0) * 2
+                ah = a._height or (a._radius or 0) * 2
+                bx1 = b.x
+                by1 = b.y
+                bw = b._width or (b._radius or 0) * 2
+                bh = b._height or (b._radius or 0) * 2
+                
+                if not (ax1 < bx1 + bw and ax1 + aw > bx1 and
+                        ay1 < by1 + bh and ay1 + ah > by1):
+                    continue
+
                 if self._check_collision(a, b):
                     self._resolve_collision(a, b)
                     for cb in self._callbacks:

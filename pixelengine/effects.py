@@ -164,6 +164,8 @@ class ParticleEmitter(PObject):
         # Update and draw particles
         alive = []
         dt = 1.0 / self._fps
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(canvas._pil_image)
         for p in self._particles:
             p.life -= dt
             if p.life <= 0:
@@ -203,9 +205,10 @@ class ParticleEmitter(PObject):
 
             # Draw particle
             px, py = int(p.x), int(p.y)
-            for dx in range(draw_size):
-                for dy in range(draw_size):
-                    canvas.set_pixel(px + dx, py + dy, color)
+            if draw_size <= 1:
+                draw.point((px, py), fill=color)
+            else:
+                draw.rectangle([px, py, px + draw_size - 1, py + draw_size - 1], fill=color)
 
             alive.append(p)
         self._particles = alive
@@ -570,26 +573,25 @@ class Trail(PObject):
 
         if self.style == "line" and n >= 2:
             # Draw connected line segments
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(canvas._pil_image)
             for i in range(n - 1):
                 x1, y1 = self._positions[i]
                 x2, y2 = self._positions[i + 1]
                 alpha = int(255 * (i + 1) / n * 0.6)
                 color = (base_color[0], base_color[1], base_color[2], alpha)
-                # Simple line between points
-                steps = max(abs(x2 - x1), abs(y2 - y1), 1)
-                for s in range(steps + 1):
-                    t = s / steps
-                    px = int(x1 + (x2 - x1) * t)
-                    py = int(y1 + (y2 - y1) * t)
-                    canvas.set_pixel(px, py, color)
+                draw.line([(x1, y1), (x2, y2)], fill=color, width=self.size)
         else:
             # Dots style (default)
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(canvas._pil_image)
             for i, (px, py) in enumerate(self._positions):
                 alpha = int(255 * (i + 1) / n * 0.6)
                 color = (base_color[0], base_color[1], base_color[2], alpha)
-                for dx in range(self.size):
-                    for dy in range(self.size):
-                        canvas.set_pixel(px + dx, py + dy, color)
+                if self.size <= 1:
+                    draw.point((px, py), fill=color)
+                else:
+                    draw.rectangle([px, py, px + self.size - 1, py + self.size - 1], fill=color)
 
 
 class ScreenFlash(PObject):
