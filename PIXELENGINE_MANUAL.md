@@ -1,4 +1,4 @@
-# PixelEngine v0.6.0
+# PixelEngine v0.7.1
 
 **PixelEngine** is a specialized, code-first Python framework for generating educational, animated pixel art videos. It renders at a configurable canvas resolution (default **480×270**) and upscales with nearest-neighbor to **1920×1080** (Full HD) for crisp pixel edges.
 
@@ -145,6 +145,7 @@ Available easings: `linear`, `ease_in`, `ease_out`, `ease_in_out`, `bounce`, `el
 - `MorphTo(source, target_shape)` — Interpolates position, color, size, and vertices.
 - `ReplacementTransform(source, target_obj)` — Source fades out, target fades in.
 - `TransformMatchingPoints(source, target)` — Morph polygon vertices by index.
+- `VMorph(source, target_shape)` — **Vector path morphing** (v0.7.0). Smoothly interpolates SVG path data between two `VectorObject` instances with stroke, fill, and opacity interpolation.
 
 ---
 
@@ -165,7 +166,7 @@ scene.play(Stagger([FadeIn(b) for b in bars], lag=0.1), duration=2.0)
 
 - `Delayed(anim, delay=0.3)` — Delay start by a fraction of total duration.
 - `Reversed(anim)` — Play animation in reverse direction.
-- `Looped(anim, count=3)` — Repeat animation N times.
+- `Looped(anim, count=3)` — Repeat animation N times. *(v0.7.1: correctly replays from original state each cycle)*
 
 ```python
 from pixelengine import Delayed, Reversed, Looped, FadeIn, Rotate
@@ -190,7 +191,44 @@ scene.play(SpringScale(obj, factor=1.5, stiffness=200, damping=8), duration=1.0)
 
 ---
 
-## 3.6 Path Animation (v4)
+## 3.6 Organic Animation System (v0.7.0)
+
+Physics-inspired animations that feel natural and alive. Every animation supports a `MotionFeel` (preset: `"snappy"`, `"bouncy"`, `"heavy"`, `"floaty"`, `"elastic"`, `"mechanical"`, `"gentle"`, `"punchy"`).
+
+### One-Shot Organic Animations
+- `OrganicMoveTo(target, x, y, feel="bouncy")` — Spring-driven movement.
+- `OrganicScale(target, factor, feel="elastic")` — Organic scaling.
+- `OrganicFadeIn(target)` / `OrganicFadeOut(target)` — Noise-textured fades.
+- `Breathe(target)`, `Sway(target)`, `Float(target)`, `Jitter(target)`, `Pulse(target)` — Expressive motions.
+- `SquashAndStretch(target, intensity)`, `Wobble(target)`, `Drift(target)` — Deformation animations.
+- `Anticipate(target)` — Pull back before action. `Settle(target)` — Come to rest. `RubberBand(target)` — Stretch and snap.
+
+### Organic Modifiers (wrap any animation)
+- `WithNoise(anim, amount)` — Add organic noise to movement.
+- `WithFollow(anim)` — Follow-through overshoot.
+- `WithAnticipation(anim)` — Wind-up before action.
+- `WithSettle(anim, oscillations=3)` — Dampened settling after. *(v0.7.1: uses absolute positioning)*
+- `WithSquashStretch(anim, intensity)` — Deformation during motion.
+
+### Organic Groups
+- `Wave(animations, delay)` — Ripple effect across objects.
+- `Cascade(animations, feel, lag)` — Sequential entrance with momentum.
+- `Swarm(animations, cx, cy, spread)` — Drift outward from a center.
+
+### Continuous Motion Updaters
+Attach to any object for persistent ambient motion:
+```python
+from pixelengine import alive, hover, orbit_idle, wind_sway
+
+obj.add_updater(alive())         # Gentle breathing + micro-drift (v0.7.1: no positional drift)
+obj.add_updater(hover(height=6)) # Smooth up/down oscillation
+obj.add_updater(orbit_idle())    # Slow circular drift
+obj.add_updater(wind_sway())     # Lateral push with gusts
+```
+
+---
+
+## 3.7 Path Animation (v4)
 
 - `BezierPath(start, control1, control2, end)` — Cubic Bézier curve.
 - `QuadraticBezierPath(start, control, end)` — Simpler quadratic Bézier.
@@ -211,7 +249,7 @@ scene.play(FollowPath(dot, orbit, loops=2), duration=4.0)
 
 ---
 
-## 3.7 Keyframe Timeline (v4)
+## 3.8 Keyframe Timeline (v4)
 
 ```python
 from pixelengine import KeyframeTrack
@@ -226,7 +264,7 @@ scene.play(track.build(), duration=3.0)
 
 ---
 
-## 3.8 Text Animation Toolkit (v4)
+## 3.9 Text Animation Toolkit (v4)
 
 - `PerCharacter(text, effect, lag)` — Staggered per-character reveal (`"fade_in"`, `"drop_in"`, `"scale_in"`, `"slide_up"`).
 - `PerWord(text, effect, lag)` — Staggered per-word reveal.
@@ -243,7 +281,7 @@ scene.play(TypeWriterPro(text, cursor=True, cursor_blink_rate=2), duration=2.0)
 
 ---
 
-## 3.9 Math Objects (v2)
+## 3.10 Math Objects (v2)
 
 - `NumberLine`, `BarChart`, `Axes`, `Graph`, `Dot`, `ValueTracker`.
 
@@ -257,9 +295,11 @@ scene.play(tracker.animate_to(100), duration=2.0)
 
 ---
 
-## 3.10 Rigid-Body Physics (v0.5.0)
+## 3.11 Rigid-Body Physics (v0.5.0)
 
 PixelEngine natively supports 2D rigid-body physics via the `pymunk` backend. Objects can fall, bounce, and collide realistically.
+
+*(v0.7.1: Friction is now frame-rate independent — consistent behavior at 24fps, 30fps, and 60fps.)*
 
 ```python
 from pixelengine import PhysicsWorld, PhysicsBody
@@ -296,6 +336,8 @@ player = Sprite.from_art([
 - Animations: `CameraPan()`, `CameraZoom()`, `CameraCenterOn()`
 - Focus: `self.camera.set_focus(x, y, radius)` for depth-of-field.
 
+*(v0.7.1: Camera coordinate restoration is now exception-safe.)*
+
 ---
 
 ## 6. Backgrounds & TileMaps
@@ -308,6 +350,7 @@ player = Sprite.from_art([
 
 - **Transitions**: `FadeTransition`, `WipeTransition`, `IrisTransition`, `DissolveTransition`.
 - **v4 Transitions**: `PixelateTransition`, `SlideTransition`, `GlitchTransition`, `ShatterTransition`, `CrossDissolve`.
+  *(v0.7.1: GlitchTransition and ShatterTransition ~100x faster via numpy vectorization.)*
 - **Particles**: `ParticleEmitter.sparks()`, `.fire()`, `.snow()`, `.explosion()`, `.rain()`, `.bubbles()`.
 - **Particle Bursts (v4)**: `ParticleBurst.form_shape()`, `.explode()`, `.disperse()`.
 - **Trail**, **ScreenFlash**, **Grid**, **Outline**.
@@ -355,6 +398,8 @@ PixelEngine uses advanced procedural audio synthesis with ADSR envelopes and opt
 - **Voiceovers**: `self.play_voiceover("text")` — Kokoro (default) or Chatterbox TTS.
 - **Animation Sync**: `VoiceOver.generate()` returns `(sfx, duration)` to sync animations with speech.
 
+*(v0.7.1: Fixed audio clipping when sounds overlap at negative time offsets.)*
+
 ```python
 # Create a magical reveal sound with heavy reverb
 self.play_sound(SoundFX.dynamic("reveal", intensity=0.8), at=2.0)
@@ -373,7 +418,7 @@ See v2 docs. `PatternTexture`, `Cube3D`, `Pendulum`, `PhysicsWorld`, etc.
 
 ---
 
-## 15-17. New v0.6.0 Features
+## 15-17. v0.6.0 Features
 
 ### 15. Auto-Captions (DynamicKaraoke)
 Automatically split and animate words in sync with `VoiceOver`.
@@ -422,17 +467,109 @@ scene.add(graph)
  - `SVGMobject(file_path, ...)` — Load and render external SVG files.
  
  **Animation Compatibility**:
- All `VectorObject` types support `Create()`, `Uncreate()`, and `DrawBorderThenFill()` for progressive reveals.
+ All `VectorObject` types support `Create()`, `Uncreate()`, `DrawBorderThenFill()`, and `VMorph()` for progressive reveals and morphing.
  
  ```python
- from pixelengine import VCircle, DrawBorderThenFill
+ from pixelengine import VCircle, DrawBorderThenFill, VMorph
  
  circle = VCircle(radius=50, cx=240, cy=135, color="#00E436", fill_color="#006622")
  scene.add(circle)
  scene.play(DrawBorderThenFill(circle), duration=2.0)
- ```
  
- ---
+ # Morph one vector shape into another
+ square = VRect(80, 80, x=200, y=95, color="#FF004D")
+ scene.play(VMorph(circle, square), duration=1.5)
+ ```
+
+---
+
+## 20. v0.7.0 Features
+
+### 20.1 MathTex — LaTeX Rendering
+Render LaTeX equations as pixel-art objects.
+```python
+from pixelengine import MathTex
+
+eq = MathTex(r"E = mc^2", x=135, y=240, color="#FFEC27")
+scene.add(eq)
+scene.play(Create(eq), duration=1.5)
+```
+
+### 20.2 Scene Composition (Compose)
+Layer multiple sub-scenes or layouts together.
+```python
+from pixelengine import Compose
+
+comp = Compose(scene, layout="split_horizontal")
+comp.add_panel(left_scene)
+comp.add_panel(right_scene)
+```
+
+### 20.3 Procedural Terrain
+Generate landscape terrain backgrounds.
+```python
+from pixelengine import Terrain
+
+ground = Terrain(width=270, height=100, x=0, y=380, seed=42, color="#1D2B53")
+scene.add(ground)
+```
+
+### 20.4 Per-Pixel Shaders
+Apply full-screen post-processing shader effects:
+- `CRTScanlines` — Retro CRT monitor lines.
+- `Ripple` — Water ripple distortion.
+- `HeatShimmer` — Heat haze effect.
+- `Pixelate` — Dynamic pixelation.
+- `ColorGrade` — Color grading (tint, contrast, saturation).
+
+```python
+from pixelengine import CRTScanlines, ColorGrade
+
+scene.add_camera_fx(CRTScanlines(gap=2, opacity=0.3))
+scene.add_camera_fx(ColorGrade(tint="#FFD4A0", contrast=1.1))
+```
+
+### 20.5 Pixel Art Generation (v0.7.0)
+Procedurally generate pixel art characters, backgrounds, and effects — no external image files needed.
+
+```python
+from pixelengine import PixelArtist
+
+# Generate a character sprite
+character = PixelArtist.character(
+    style="knight", palette="pico8",
+    base_size=16, x=135, y=240
+)
+scene.add(character)
+
+# Generate a background
+bg = PixelArtist.background(
+    style="forest", palette="gameboy",
+    width=270, height=480
+)
+scene.add(bg)
+```
+
+Available palettes: `"pico8"`, `"gameboy"`, `"nes"`, `"pastel"`, `"neon"`, `"earth"`, `"ocean"`.
+
+---
+
+## 21. v0.7.1 Bug Fixes
+
+Key stability improvements in this release:
+
+| Area | Fix |
+|------|-----|
+| **Physics** | Friction is now frame-rate independent (`friction**dt`). |
+| **Animation** | `Looped` correctly replays from original state each cycle. |
+| **Animation** | `Sequence` cleans up internal state for reuse. |
+| **Effects** | GlitchTransition & ShatterTransition ~100x faster (numpy). |
+| **Scene** | Camera coordinate restoration is exception-safe. |
+| **Sound** | Fixed audio clipping at negative time offsets. |
+| **Organic** | `alive()` no longer drifts; `WithSettle` uses absolute positioning. |
+| **Transform** | `VMorph` safely cleans up on interrupted animations. |
+
+---
 <br>
 
 # 🤖 Special Guide for AI Agents
@@ -473,15 +610,27 @@ scene.add(graph)
        PerCharacter, PerWord, ScrambleReveal, TypeWriterPro,
        # v4 Transitions
        PixelateTransition, GlitchTransition, ShatterTransition, CrossDissolve,
-        # v4 Particle Bursts
-        ParticleBurst,
-        # v4 Reactive Links
-        Link, ReactTo,
-        # v0.6.0 Vector Graphics
-        VPath, VLine, VCircle, VRect, VPolygon, VArrow, Vector, SVGMobject,
-    )
+       # v4 Particle Bursts
+       ParticleBurst,
+       # v4 Reactive Links
+       Link, ReactTo,
+       # v0.6.0 Vector Graphics
+       VPath, VLine, VCircle, VRect, VPolygon, VArrow, Vector, SVGMobject,
+       VMorph,
+       # v0.7.0 New Features
+       MathTex, Compose, Terrain,
+       CRTScanlines, Ripple, HeatShimmer, Pixelate, ColorGrade,
+       PixelArtist,
+       # v0.7.0 Organic Animation System
+       OrganicMoveTo, OrganicScale, OrganicFadeIn, OrganicFadeOut,
+       Breathe, Sway, Float, Jitter, Pulse,
+       SquashAndStretch, Wobble, Drift, Anticipate, Settle, RubberBand,
+       WithNoise, WithFollow, WithAnticipation, WithSettle, WithSquashStretch,
+       Wave, Cascade, Swarm,
+       alive, hover, orbit_idle, wind_sway,
+   )
    ```
-5. **No File dependencies**: Use procedural generation only.
+5. **No File dependencies**: Use procedural generation only. Use `PixelArtist` for pixel art assets.
 6. **VoiceOver** is blocking. For simultaneous animation + speech, use `VoiceOver.generate()`.
 7. **Stagger (v4)**: Use `Stagger([anim1, anim2, ...], lag=0.1)` for wave/cascade effects.
 8. **Springs (v4)**: Use `SpringTo`/`SpringScale` for organic bouncy motion.
@@ -496,3 +645,11 @@ scene.add(graph)
    L = Layout.portrait()
    title = PixelText("HELLO", x=L.TITLE_ZONE.x, y=L.TITLE_ZONE.y, align="center")
    ```
+15. **Organic Animations (v0.7.0)**: Prefer organic animations over basic ones for natural feel:
+   - Use `OrganicMoveTo` instead of `MoveTo` for spring-driven movement.
+   - Use `WithSettle(anim)` to add dampened settling after any animation.
+   - Use `Wave([...])` or `Cascade([...])` for group animations instead of `Stagger`.
+   - Attach `alive()`, `hover()`, or `wind_sway()` updaters to ambient objects.
+16. **Pixel Art (v0.7.0)**: Use `PixelArtist.character()` and `PixelArtist.background()` to generate visual assets procedurally.
+17. **Shaders (v0.7.0)**: Use `CRTScanlines`, `ColorGrade`, etc. as camera FX for cinematic quality.
+18. **MathTex (v0.7.0)**: Use `MathTex(r"E = mc^2")` for LaTeX equations in educational videos.
