@@ -238,20 +238,21 @@ class Scene:
             self._capture_frame()
 
     def _auto_sound_for_animations(self, animations):
-        """Add auto-sounds based on animation types."""
+        """Add auto-sounds based on animation types using dynamic SFX."""
         for anim in animations:
             anim_type = type(anim).__name__
 
             if anim_type == "FadeIn":
-                self.play_sound(SoundFX.reveal())
+                self.play_sound(SoundFX.dynamic("reveal"))
             elif anim_type == "FadeOut":
-                self.play_sound(SoundFX.dismiss())
-            elif anim_type == "FadeTransition":
-                self.play_sound(SoundFX.whoosh())
-            elif anim_type == "WipeTransition":
-                self.play_sound(SoundFX.whoosh())
-            elif anim_type == "IrisTransition":
-                self.play_sound(SoundFX.whoosh())
+                self.play_sound(SoundFX.dynamic("dismiss"))
+            elif anim_type in ("FadeTransition", "WipeTransition",
+                               "IrisTransition", "SlideTransition"):
+                self.play_sound(SoundFX.dynamic("transition"))
+            elif anim_type == "GlitchTransition":
+                self.play_sound(SoundFX.dynamic("impact", intensity=0.6))
+            elif anim_type == "ShatterTransition":
+                self.play_sound(SoundFX.dynamic("impact", intensity=0.8))
 
     # _last_tw_char_count is now initialized per-instance in __init__
 

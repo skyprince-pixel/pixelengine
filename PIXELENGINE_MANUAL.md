@@ -10,7 +10,7 @@ All rendering is done via **Pillow** images encoded straight into **ffmpeg** wit
 
 1. **Python**: 3.8+ (Virtual Environment **highly** recommended)
 2. **Core Dependencies**: `Pillow`, `numpy`
-3. **Optional High-Performance Packages**: `av` (PyAV for 3x faster video encoding), `pymunk` (for rigid-body physics), `pydub` (for professional audio mixing). Install all with `pip install .[perf]`.
+3. **Optional High-Performance Packages**: `av` (PyAV for 3x faster video encoding), `pymunk` (for rigid-body physics), `pydub` (for professional audio mixing), `pedalboard` (for premium audio effects like Reverb/Chorus). Install all with `pip install .[perf]`.
 4. **Audio Dependencies**: `soundfile`, `kokoro-onnx` (default TTS), `chatterbox-tts`, `torch`, `torchaudio` (optional high-quality TTS)
 5. **System Dep**: `ffmpeg` (must be accessible in PATH to mux final MP4s).
 
@@ -347,9 +347,23 @@ arrow.add_updater(Link.endpoints(dot_a, dot_b))
 
 ## 11. Procedural Audio & TTS
 
-- `SoundFX.coin()`, `.explosion()`, etc. — procedural synthesis
-- `self.play_voiceover("text")` — Kokoro (default) or Chatterbox TTS
-- Animation during speech: `VoiceOver.generate()` returns `(sfx, duration)`
+PixelEngine uses advanced procedural audio synthesis with ADSR envelopes and optional studio-grade effects via Spotify's **Pedalboard** library.
+
+- **Dynamic Contextual SFX**: `SoundFX.dynamic("success", intensity=0.7)` — Generates a unique piano/instrument sound based on the situation (e.g. `success`, `error`, `reveal`, `transition`, `typing`, `impact`, `wonder`, `tension`).
+- **Vintage-Premium Presets**: `SoundFX.coin()`, `.explosion()`, `.jump()` — Classic API names, but completely rebuilt using high-quality piano, bell, and mallet synthesis instead of raw 8-bit waveforms.
+- **Custom Instrument Notes**: `SoundFX.piano_note("C4")`, `SoundFX.bell_note("E5")`, `SoundFX.mallet_note("G5")`.
+- **Voiceovers**: `self.play_voiceover("text")` — Kokoro (default) or Chatterbox TTS.
+- **Animation Sync**: `VoiceOver.generate()` returns `(sfx, duration)` to sync animations with speech.
+
+```python
+# Create a magical reveal sound with heavy reverb
+self.play_sound(SoundFX.dynamic("reveal", intensity=0.8), at=2.0)
+
+# Play a piano chord
+self.play_sound(SoundFX.piano_note("C4"))
+self.play_sound(SoundFX.piano_note("E4"))
+self.play_sound(SoundFX.piano_note("G4"))
+```
 
 ---
 

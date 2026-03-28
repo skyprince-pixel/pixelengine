@@ -8,6 +8,9 @@ All notable changes to PixelEngine will be documented in this file.
  - **Resolution-independent Vector Graphics**: `VPath`, `VCircle`, `VRect`, `VPolygon`, `VArrow`, `Vector`
  - **SVG Support**: `SVGMobject(file_path)` for importing and rendering external SVG files
  - Full integration of Vector objects with construction animations (`Create`, `Uncreate`, `DrawBorderThenFill`)
+ - **Advanced Procedural Audio**: Rebuilt sound module from scratch with Piano, Bell, and Mallet synthesis + ADSR envelopes.
+ - **Pedalboard FX**: Studio-grade Reverb, Chorus, Compressor, Delay via Spotify's Pedalboard library.
+ - **Dynamic SFX**: `SoundFX.dynamic(situation)` to auto-generate contextual sounds (e.g. `success`, `error`, `wonder`, `tension`).
  
  ### Fixed
  - Render quality sync for child-objects in `Scene._render_object`

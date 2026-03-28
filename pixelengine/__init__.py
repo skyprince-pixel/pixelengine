@@ -238,7 +238,7 @@ from pixelengine.simulations import (
 )
 
 # ── Sound ───────────────────────────────────────────────────
-from pixelengine.sound import SoundFX, SoundTimeline
+from pixelengine.sound import SoundFX, SoundTimeline, note_freq
 from pixelengine.voiceover import VoiceOver
 
 # ── Scene ───────────────────────────────────────────────────
@@ -325,7 +325,7 @@ __all__ = [
     "CollisionCallback", "StaticBody", "Bounds",
     "Pendulum", "Spring", "OrbitalSystem", "Rope", "FluidParticles", "NetworkGraph",
     # Sound
-    "SoundFX", "SoundTimeline", "VoiceOver",
+    "SoundFX", "SoundTimeline", "note_freq", "VoiceOver",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
 ]
