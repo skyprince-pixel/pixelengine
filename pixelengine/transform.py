@@ -383,9 +383,7 @@ class VMorph(Animation):
 
     def on_complete(self):
         # Restore original render and copy target's paths
-        if hasattr(self.target, '_original_render'):
-            self.target.render = self.target._original_render
-            del self.target._original_render
+        self._cleanup_render()
         # Copy target shape's paths if both are VectorObjects
         from pixelengine.vector import VectorObject
         if isinstance(self.target, VectorObject) and isinstance(self.target_shape, VectorObject):
@@ -403,4 +401,18 @@ class VMorph(Animation):
         for attr in ('_vmorph_src', '_vmorph_dst', '_vmorph_alpha'):
             if hasattr(self.target, attr):
                 delattr(self.target, attr)
+
+    def _cleanup_render(self):
+        """Restore the original render method if it was replaced."""
+        if hasattr(self.target, '_original_render'):
+            self.target.render = self.target._original_render
+            del self.target._original_render
+
+    def __del__(self):
+        """Safety net: restore render method if animation was interrupted."""
+        try:
+            if hasattr(self, 'target') and hasattr(self.target, '_original_render'):
+                self._cleanup_render()
+        except Exception:
+            pass  # Best-effort cleanup during garbage collection
 

@@ -2,6 +2,7 @@
 *.mp4
 *.wav
 *.onnx
+*.png
 
 # OS
 .DS_Store
@@ -36,3 +37,7 @@ outputs/
 full_audio.wav
 scene_*.wav
 examples/
+
+# Demo/test scripts (not part of framework)
+demo_*.py
+test_*.py

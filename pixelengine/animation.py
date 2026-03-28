@@ -433,6 +433,11 @@ class Sequence:
         local_alpha = (alpha - idx * segment) / segment
         local_alpha = max(0.0, min(1.0, local_alpha))
         self.animations[idx].interpolate(local_alpha)
+        # Clean up finalization flags when sequence completes
+        if alpha >= 1.0:
+            for anim in self.animations:
+                if hasattr(anim, '_seq_finalized'):
+                    del anim._seq_finalized
 
 
 class Stagger:
@@ -536,15 +541,38 @@ class Looped:
         self.animation = animation
         self.count = max(1, count)
         self._prev_cycle = -1
+        self._saved_state = None  # For restoring target to original state
 
     def interpolate(self, alpha: float):
         cycle_alpha = (alpha * self.count) % 1.0
         current_cycle = int(alpha * self.count)
-        # Reset animation state at cycle boundaries
+
+        # Save original state before first cycle begins
+        if self._saved_state is None and hasattr(self.animation, 'target'):
+            t = self.animation.target
+            self._saved_state = {
+                'x': t.x, 'y': t.y,
+                'opacity': t.opacity,
+                'scale_x': t.scale_x, 'scale_y': t.scale_y,
+            }
+            if hasattr(t, 'angle'):
+                self._saved_state['angle'] = t.angle
+
+        # Reset animation state at cycle boundaries by restoring original state
         if current_cycle != self._prev_cycle and current_cycle > 0:
             if hasattr(self.animation, '_started'):
                 self.animation._started = False
                 self.animation._completed = False
+            # Restore target to original state so on_start() captures it correctly
+            if self._saved_state and hasattr(self.animation, 'target'):
+                t = self.animation.target
+                t.x = self._saved_state['x']
+                t.y = self._saved_state['y']
+                t.opacity = self._saved_state['opacity']
+                t.scale_x = self._saved_state['scale_x']
+                t.scale_y = self._saved_state['scale_y']
+                if 'angle' in self._saved_state and hasattr(t, 'angle'):
+                    t.angle = self._saved_state['angle']
             self._prev_cycle = current_cycle
         # At the very end, ensure we hit 1.0
         if alpha >= 1.0:

@@ -858,38 +858,46 @@ class GlitchTransition:
             self._overlay_obj = _ImageOverlay(self._overlay_img, z_index=9999)
             self.scene.add(self._overlay_obj)
 
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        # Use numpy array for fast pixel manipulation
+        import numpy as np
+        pixels = np.zeros((h, w, 4), dtype=np.uint8)
 
-        # RGB channel offset bars
+        # RGB channel offset bars (using numpy slice assignment)
         num_bars = max(1, int(5 * t))
+        draw = ImageDraw.Draw(Image.fromarray(pixels))
         for _ in range(num_bars):
             bar_y = self._rng.randint(0, h - 1)
-            bar_h = self._rng.randint(1, max(1, int(6 * t)))
+            bar_h_val = self._rng.randint(1, max(1, int(6 * t)))
             offset_x = self._rng.randint(-int(10 * t), int(10 * t))
-            # Random RGB tinted bar
             channel = self._rng.choice([(255, 0, 0), (0, 255, 0), (0, 0, 255)])
             bar_alpha = int(180 * t)
-            color = (*channel, bar_alpha)
-            for y in range(bar_y, min(bar_y + bar_h, h)):
-                for x in range(max(0, offset_x), min(w, w + offset_x)):
-                    img.putpixel((x % w, y), color)
+            y_end = min(bar_y + bar_h_val, h)
+            x_start = max(0, offset_x)
+            x_end = min(w, w + offset_x)
+            if x_start < x_end and bar_y < y_end:
+                pixels[bar_y:y_end, x_start:x_end] = (*channel, bar_alpha)
 
-        # Scan lines
+        # Scan lines (vectorized: set every other row)
         if t > 0.3:
             scan_alpha = int(60 * t)
-            for y in range(0, h, 2):
-                for x in range(w):
-                    img.putpixel((x, y), (0, 0, 0, scan_alpha))
+            pixels[0::2, :, :3] = 0
+            # Only set alpha where it's not already set by bars
+            scan_mask = pixels[0::2, :, 3] < scan_alpha
+            pixels[0::2, :, 3] = np.where(scan_mask, scan_alpha, pixels[0::2, :, 3])
 
-        # Random noise pixels
+        # Random noise pixels (vectorized)
         noise_count = int(w * h * t * 0.02)
-        for _ in range(noise_count):
-            nx = self._rng.randint(0, w - 1)
-            ny = self._rng.randint(0, h - 1)
-            brightness = self._rng.randint(100, 255)
-            img.putpixel((nx, ny), (brightness, brightness, brightness, int(200 * t)))
+        if noise_count > 0:
+            nx = np.array([self._rng.randint(0, w - 1) for _ in range(noise_count)])
+            ny = np.array([self._rng.randint(0, h - 1) for _ in range(noise_count)])
+            brightness = np.array([self._rng.randint(100, 255) for _ in range(noise_count)], dtype=np.uint8)
+            noise_alpha = int(200 * t)
+            pixels[ny, nx, 0] = brightness
+            pixels[ny, nx, 1] = brightness
+            pixels[ny, nx, 2] = brightness
+            pixels[ny, nx, 3] = noise_alpha
 
-        self._overlay_obj._image = img
+        self._overlay_obj._image = Image.fromarray(pixels, "RGBA")
 
         if alpha >= 1.0:
             self.scene.remove(self._overlay_obj)
@@ -939,8 +947,12 @@ class ShatterTransition:
         tile_h = h // self.pieces
 
         img = Image.new("RGBA", (w, h), self.color if alpha > 0.1 else (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
 
-        # Each tile flies away based on its velocity
+        tiled_alpha = int(255 * max(0, 1.0 - alpha * 1.5))
+        tile_color = (200, 200, 200, tiled_alpha)
+
+        # Each tile flies away based on its velocity — draw as rectangles
         for row in range(self.pieces):
             for col in range(self.pieces):
                 idx = row * self.pieces + col
@@ -950,15 +962,20 @@ class ShatterTransition:
                 ox = int(vx * alpha * w * 0.5)
                 oy = int(vy * alpha * h * 0.5 + alpha * alpha * h * 0.3)  # gravity
 
-                tiled_alpha = int(255 * max(0, 1.0 - alpha * 1.5))
+                # Compute tile rectangle bounds
+                x1 = col * tile_w + ox
+                y1 = row * tile_h + oy
+                x2 = x1 + tile_w - 1
+                y2 = y1 + tile_h - 1
 
-                # Draw a small colored rect at the displaced position
-                for py in range(tile_h):
-                    for px in range(tile_w):
-                        src_x = col * tile_w + px + ox
-                        src_y = row * tile_h + py + oy
-                        if 0 <= src_x < w and 0 <= src_y < h:
-                            img.putpixel((src_x, src_y), (200, 200, 200, tiled_alpha))
+                # Clip to canvas bounds
+                x1_c = max(0, min(w - 1, x1))
+                y1_c = max(0, min(h - 1, y1))
+                x2_c = max(0, min(w - 1, x2))
+                y2_c = max(0, min(h - 1, y2))
+
+                if x1_c < x2_c and y1_c < y2_c:
+                    draw.rectangle([x1_c, y1_c, x2_c, y2_c], fill=tile_color)
 
         self._overlay_obj._image = img
 

@@ -1026,16 +1026,21 @@ class SoundTimeline:
         for time_s, sfx in self._events:
             start_idx = int(time_s * SAMPLE_RATE)
             end_idx = start_idx + len(sfx.samples)
+            # Source offset: skip samples if the sound starts before t=0
+            src_offset = 0
             if start_idx < 0:
+                src_offset = -start_idx
                 start_idx = 0
             if start_idx >= total_samples:
                 continue
             end_idx = min(end_idx, total_samples)
             src_len = end_idx - start_idx
+            if src_len <= 0 or src_offset >= len(sfx.samples):
+                continue
             sfx_samples = sfx.samples
             if not sfx.name.startswith("voiceover_"):
                 sfx_samples = sfx.samples * 0.5
-            mix_buf[start_idx:end_idx] += sfx_samples[:src_len]
+            mix_buf[start_idx:end_idx] += sfx_samples[src_offset:src_offset + src_len]
         peak = np.max(np.abs(mix_buf))
         if peak > 1.0:
             mix_buf /= peak

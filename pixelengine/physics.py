@@ -283,8 +283,11 @@ class PhysicsWorld:
             # Euler integration
             body.vx += body.ax * dt
             body.vy += body.ay * dt
-            body.vx *= body.friction
-            body.vy *= body.friction
+            # Frame-rate independent friction: friction**dt
+            # ensures consistent damping regardless of FPS
+            friction_dt = body.friction ** dt
+            body.vx *= friction_dt
+            body.vy *= friction_dt
             body.x += body.vx * dt
             body.y += body.vy * dt
 

@@ -63,6 +63,21 @@ from pixelengine.animation import (
     SpringScale,
 )
 
+# ── Organic Animation System (default) ─────────────────────
+from pixelengine.organic import (
+    MotionFeel, organic_noise,
+    # Organic one-shot animations
+    OrganicMoveTo, OrganicScale, OrganicFadeIn, OrganicFadeOut, OrganicRotate,
+    Breathe, Sway, Float, Jitter, Pulse,
+    SquashAndStretch, Wobble, Drift, Anticipate, Settle, RubberBand,
+    # Organic modifiers
+    WithNoise, WithFollow, WithAnticipation, WithSettle, WithSquashStretch,
+    # Organic groups
+    Wave, Cascade, Swarm,
+    # Continuous motion updaters
+    alive, hover, orbit_idle, wind_sway,
+)
+
 # ── Construction Animations (Manim-like) ───────────────────
 from pixelengine.construction import (
     GrowFromPoint,
@@ -241,6 +256,9 @@ from pixelengine.simulations import (
 from pixelengine.sound import SoundFX, SoundTimeline, note_freq
 from pixelengine.voiceover import VoiceOver
 
+# ── Pixel Art Generation ───────────────────────────────────
+from pixelengine.pixelart import PixelArtist, PALETTES, SKIN_TONES
+
 # ── Scene ───────────────────────────────────────────────────
 from pixelengine.scene import Scene
 
@@ -251,7 +269,15 @@ __all__ = [
     "Layout", "Zone",
     # Shapes
     "Rect", "Circle", "Line", "Triangle", "Polygon",
-    # Animation
+    # Organic Animation System (default)
+    "MotionFeel", "organic_noise",
+    "OrganicMoveTo", "OrganicScale", "OrganicFadeIn", "OrganicFadeOut", "OrganicRotate",
+    "Breathe", "Sway", "Float", "Jitter", "Pulse",
+    "SquashAndStretch", "Wobble", "Drift", "Anticipate", "Settle", "RubberBand",
+    "WithNoise", "WithFollow", "WithAnticipation", "WithSettle", "WithSquashStretch",
+    "Wave", "Cascade", "Swarm",
+    "alive", "hover", "orbit_idle", "wind_sway",
+    # Animation (classic)
     "Animation", "MoveTo", "MoveBy",
     "FadeIn", "FadeOut", "Scale", "Rotate",
     "Blink", "ColorShift",
@@ -326,6 +352,8 @@ __all__ = [
     "Pendulum", "Spring", "OrbitalSystem", "Rope", "FluidParticles", "NetworkGraph",
     # Sound
     "SoundFX", "SoundTimeline", "note_freq", "VoiceOver",
+    # Pixel Art Generation
+    "PixelArtist", "PALETTES", "SKIN_TONES",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
 ]

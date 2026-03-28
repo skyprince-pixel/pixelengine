@@ -327,8 +327,10 @@ class Scene:
                 orig_x, orig_y = obj.x, obj.y
                 screen_x, screen_y = self.camera.world_to_screen(obj.x, obj.y)
                 obj.x, obj.y = screen_x, screen_y
-                self._render_object(obj)
-                obj.x, obj.y = orig_x, orig_y
+                try:
+                    self._render_object(obj)
+                finally:
+                    obj.x, obj.y = orig_x, orig_y
             else:
                 self._render_object(obj)
 
