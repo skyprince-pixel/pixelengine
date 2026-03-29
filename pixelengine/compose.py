@@ -18,7 +18,6 @@ import sys
 import time
 import tempfile
 from PIL import Image
-import numpy as np
 
 from pixelengine.config import PixelConfig, DEFAULT_CONFIG
 from pixelengine.renderer import Renderer

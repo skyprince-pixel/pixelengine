@@ -25,7 +25,6 @@ Usage::
         return arr
     scene.add_camera_fx(PixelShader(invert))
 """
-import math
 import numpy as np
 from PIL import Image
 
@@ -145,10 +144,18 @@ class Ripple:
         ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
         dist = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
 
-        # Wave displacement
+        # Wave displacement (radial outward from center)
         phase = dist / self.wavelength * 2 * np.pi - self._time * self.speed
-        dx = (self.amplitude * np.sin(phase)).astype(np.int32)
-        dy = (self.amplitude * np.cos(phase)).astype(np.int32)
+        
+        # Avoid division by zero at the exact center point
+        safe_dist = np.maximum(dist, 1e-4)
+        
+        # Calculate displacement amount based on sine wave
+        disp = self.amplitude * np.sin(phase)
+        
+        # Apply displacement directionally outward
+        dx = (disp * (xs - cx) / safe_dist).astype(np.int32)
+        dy = (disp * (ys - cy) / safe_dist).astype(np.int32)
 
         # Displaced source coordinates
         src_x = np.clip((xs + dx).astype(np.int32), 0, w - 1)

@@ -398,13 +398,75 @@ class PhysicsWorld:
                 b.vx -= j * nx / b.mass
                 b.vy -= j * ny / b.mass
         else:
-            restitution = min(a.restitution, b.restitution)
-            if not a.is_static:
-                a.vx *= -restitution
-                a.vy *= -restitution
-            if not b.is_static:
-                b.vx *= -restitution
-                b.vy *= -restitution
+            # Simple AABB vs AABB resolution (penetration depth handling)
+            ax1 = a.x
+            ay1 = a.y
+            aw = a._width or (a._radius or 0) * 2
+            ah = a._height or (a._radius or 0) * 2
+            bx1 = b.x
+            by1 = b.y
+            bw = b._width or (b._radius or 0) * 2
+            bh = b._height or (b._radius or 0) * 2
+            
+            acx = ax1 + aw / 2
+            acy = ay1 + ah / 2
+            bcx = bx1 + bw / 2
+            bcy = by1 + bh / 2
+            
+            ahx = aw / 2
+            ahy = ah / 2
+            bhx = bw / 2
+            bhy = bh / 2
+            
+            dx = bcx - acx
+            dy = bcy - acy
+            
+            overlap_x = ahx + bhx - abs(dx)
+            overlap_y = ahy + bhy - abs(dy)
+            
+            if overlap_x > 0 and overlap_y > 0:
+                # Find the axis of least penetration
+                nx, ny = 0, 0
+                if overlap_x < overlap_y:
+                    nx = -1 if dx > 0 else 1
+                    overlap = overlap_x
+                else:
+                    ny = -1 if dy > 0 else 1
+                    overlap = overlap_y
+                    
+                # Positional correction
+                if not a.is_static and not b.is_static:
+                    a.x += nx * overlap / 2
+                    a.y += ny * overlap / 2
+                    b.x -= nx * overlap / 2
+                    b.y -= ny * overlap / 2
+                elif not a.is_static:
+                    a.x += nx * overlap
+                    a.y += ny * overlap
+                elif not b.is_static:
+                    b.x -= nx * overlap
+                    b.y -= ny * overlap
+                
+                # Velocity resolution
+                rel_vx = a.vx - b.vx
+                rel_vy = a.vy - b.vy
+                vel_along = rel_vx * nx + rel_vy * ny
+                if vel_along > 0:
+                    return
+                
+                restitution = min(a.restitution, b.restitution)
+                j = -(1 + restitution) * vel_along
+                if not a.is_static and not b.is_static:
+                    j /= (1 / a.mass + 1 / b.mass)
+                else:
+                    j /= (1 / a.mass) if not a.is_static else (1 / b.mass)
+                
+                if not a.is_static:
+                    a.vx += j * nx / a.mass
+                    a.vy += j * ny / a.mass
+                if not b.is_static:
+                    b.vx -= j * nx / b.mass
+                    b.vy -= j * ny / b.mass
 
     def _enforce_bounds(self, body: PhysicsBody,
                         bx_min, by_min, bx_max, by_max):

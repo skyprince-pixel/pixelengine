@@ -1,0 +1,456 @@
+# PixelEngine v0.7.1 — AI Agent Cookbook
+
+> This file is the primary reference for AI agents generating videos with PixelEngine.
+> For the complete API documentation, see `llms-full.txt`.
+
+## Golden Rules
+
+1. **ALWAYS** run `python script.py --test-frame=2.0` first to visually verify layout before full render.
+2. **ALWAYS** use `Layout.portrait()` / `Layout.landscape()` for positioning. Never hardcode `x=200`.
+3. **ALWAYS** use `OrganicMoveTo` instead of `MoveTo`, `OrganicFadeIn` instead of `FadeIn`.
+4. **ALWAYS** use `VStack` / `HStack` for grouping — never manually compute `y_offset` per element.
+5. **ALWAYS** reveal objects with a construction animation. Use `self.play(Create(obj))` not bare `self.add(obj)`.
+6. **Keep scenes clean by default.** Only add lighting (`PointLight`), camera FX (`Vignette`, `ColorGrade`),
+   or heavy VFX (`ParticleBurst`, `ChromaticAberration`) when the scene explicitly benefits from them.
+7. **NEVER** have `self.wait() > 2s` without simultaneous visual activity.
+
+## Quick Start Template (Copy This)
+
+```python
+from pixelengine import (
+    CinematicScene, PixelConfig, Layout, VStack, HStack,
+    PixelText, Rect, Circle, MathTex,
+    # Organic animations (ALWAYS use these)
+    OrganicMoveTo, OrganicFadeIn, OrganicFadeOut, OrganicScale,
+    Cascade, Wave, WithSettle,
+    alive, hover,
+    # Construction animations (use for reveals)
+    Create, DrawBorderThenFill, GrowFromPoint, GrowFromEdge,
+    # Transforms
+    MorphTo, VMorph,
+    # Animation control
+    AnimationGroup, Sequence, Stagger, SpringTo,
+    PerCharacter, ScrambleReveal, TypeWriterPro, DynamicCaption,
+    # Sound & Voice
+    SoundFX,
+)
+from pixelengine.voiceover import VoiceOver
+
+class MyShort(CinematicScene):
+    def construct(self):
+        L = Layout.portrait()  # 270x480
+
+        # 1. Background
+        self.set_background("#1D2B53")
+
+        # 2. Content (use VStack for layout!)
+        title = PixelText("YOUR TITLE", scale=2, color="#FFEC27")
+        body = PixelText("SUBTITLE HERE", scale=1, color="#C2C3C7")
+        stack = VStack([title, body], spacing=15, align="center")
+        stack.move_to(L.MAIN_ZONE.x, L.MAIN_ZONE.y)
+        self.add(stack)
+
+        # 3. Reveal with organic animation
+        self.play(Cascade([OrganicFadeIn(o) for o in [title, body]], feel="bouncy"), duration=1.5)
+        self.wait(1.0)
+
+if __name__ == "__main__":
+    MyShort(PixelConfig.portrait()).render()
+```
+
+### Optional: Add Atmosphere When Needed
+If the scene benefits from cinematic polish, call `setup_atmosphere()` (available on `CinematicScene`):
+```python
+# One-call setup: gradient BG + lighting + Vignette + ColorGrade
+self.setup_atmosphere("dark")   # or: "warm", "cool", "retro", "clean"
+```
+Or add individual effects:
+```python
+from pixelengine import Vignette, ColorGrade, PointLight, AmbientLight
+self.add_camera_fx(Vignette(intensity=0.5))
+self.add_light(PointLight(x=135, y=200, radius=150, color="#29ADFF"))
+```
+
+---
+
+## Pattern: Voiceover Synced with Animation
+
+```python
+# Pre-generate speech so we know the exact duration
+sfx, dur = VoiceOver.generate("Euler's identity connects five constants.", engine="kokoro")
+
+# Play animation synced to the voice duration
+self.play(
+    AnimationGroup(
+        Create(equation),
+        OrganicMoveTo(spotlight, x=135, y=200, feel="gentle"),
+    ),
+    duration=dur,
+    sound=sfx,
+)
+```
+
+For auto-synced subtitles, use `DynamicCaption`:
+```python
+L = Layout.portrait()
+cap = DynamicCaption("Euler's identity connects five constants.",
+                     x=L.LOWER_THIRD.x, y=L.LOWER_THIRD.y)
+cap.z_index = 20
+self.add(cap)
+self.play(cap.track(), duration=dur, sound=sfx)
+```
+
+---
+
+## Pattern: Physics Simulation (Gravity, Bouncing, Collisions)
+
+```python
+from pixelengine import PhysicsWorld, PhysicsBody, Circle, Rect
+
+# Create physics world (auto-steps during wait/play)
+physics = PhysicsWorld(gravity_y=200, bounds=(0, 0, 270, 480))
+self.physics = physics
+
+# Create a bouncy ball
+ball = Circle(radius=10, x=135, y=50, color="#FF004D")
+ball.casts_shadow = True
+body = PhysicsBody(ball, mass=1.0, restitution=0.8)
+self.add(ball)
+physics.add_body(body)
+
+# Create a floor (static body with mass=0)
+floor = Rect(270, 10, x=135, y=470, color="#29ADFF")
+floor_body = PhysicsBody(floor, mass=0)
+self.add(floor)
+physics.add_body(floor_body)
+
+# Physics runs automatically during wait
+self.wait(4.0)
+```
+
+---
+
+## Pattern: 3D Object with Camera Orbit
+
+```python
+from pixelengine import Cube3D, Sphere3D, Pyramid3D, Vec3
+from pixelengine import Orbit3D, Zoom3D
+
+cube = Cube3D(size=40, x=135, y=200, color="#FF004D", edge_color="#FFF1E8")
+self.add(cube)
+self.play(Create(cube), duration=1.0)
+
+# Orbit camera around the 3D object
+self.play(Orbit3D(cube, degrees=360, axis="y"), duration=3.0)
+```
+
+---
+
+## Pattern: Math Equations (LaTeX)
+
+```python
+from pixelengine import MathTex, Create
+
+eq = MathTex(r"E = mc^2", x=L.MAIN_ZONE.x, y=L.MAIN_ZONE.y, color="#FFEC27")
+eq.z_index = 10
+self.add(eq)
+self.play(Create(eq), duration=1.5, sound=SoundFX.dynamic("reveal"))
+```
+
+---
+
+## Pattern: Charts & Data Visualization
+
+```python
+from pixelengine import BarChart, Axes, Graph, ValueTracker, GrowFromEdge
+
+# Bar chart with animated growth
+chart = BarChart(
+    values=[30, 70, 50, 90, 40],
+    labels=["A", "B", "C", "D", "E"],
+    x=L.MAIN_ZONE.x, y=L.MAIN_ZONE.y,
+    width=200, height=120,
+    color="#29ADFF"
+)
+self.add(chart)
+self.play(GrowFromEdge(chart, edge="bottom"), duration=2.0)
+
+# Animated value tracker
+tracker = ValueTracker(0)
+bar = Rect(10, 50, x=100, y=200, color="#FF004D")
+bar.add_updater(lambda obj, dt: setattr(obj, 'height', max(1, int(50 * tracker.value / 100))))
+self.add(bar)
+self.play(tracker.animate_to(100), duration=2.0)
+```
+
+---
+
+## Pattern: Vector Graphics & Morphing
+
+```python
+from pixelengine import VCircle, VRect, VPolygon, VArrow, Vector, VMorph, Create
+
+# Draw a smooth circle
+circle = VCircle(radius=30, cx=135, cy=200, color="#00E436", fill_color="#006622")
+self.add(circle)
+self.play(DrawBorderThenFill(circle), duration=1.5)
+
+# Morph circle into a square
+square = VRect(60, 60, x=135, y=200, color="#FF004D")
+self.play(VMorph(circle, square), duration=1.5)
+
+# Mathematical vector with label
+force = Vector(dx=50, dy=-30, origin_x=100, origin_y=300, color="#FFEC27", label="F")
+self.add(force)
+self.play(Create(force), duration=1.0)
+```
+
+---
+
+## Pattern: Particle Effects
+
+```python
+from pixelengine import ParticleEmitter, ParticleBurst, ScreenFlash
+
+# Persistent fire effect
+fire = ParticleEmitter.fire(x=135, y=400)
+self.add(fire)
+
+# One-shot explosion burst
+self.play(ParticleBurst.explode(self, x=135, y=200), duration=0.5,
+          sound=SoundFX.dynamic("impact"))
+
+# Celebratory disperse
+self.play(ParticleBurst.disperse(self, x=135, y=240), duration=1.0)
+
+# Screen flash for dramatic reveals
+self.play(ScreenFlash(self, color="#FFFFFF"), duration=0.3)
+```
+
+---
+
+## Pattern: Scene Transitions
+
+```python
+from pixelengine import GlitchTransition, ShatterTransition, CrossDissolve, PixelateTransition
+
+# Between scenes, use a transition:
+self.play(GlitchTransition(self, intensity=0.7), duration=0.5)
+# or
+self.play(ShatterTransition(self, num_pieces=20), duration=0.8)
+# or
+self.play(CrossDissolve(self), duration=1.0)
+# or
+self.play(PixelateTransition(self), duration=0.6)
+```
+
+---
+
+## Pattern: Organic Group Entrance
+
+```python
+from pixelengine import Cascade, Wave, Swarm, OrganicFadeIn
+
+items = [PixelText(f"ITEM {i}", scale=1) for i in range(5)]
+stack = VStack(items, spacing=12, align="center")
+stack.move_to(L.MAIN_ZONE.x, L.MAIN_ZONE.y)
+self.add(stack)
+
+# Option A: Cascading entrance (sequential with momentum)
+self.play(Cascade([OrganicFadeIn(o) for o in items], feel="elastic"), duration=2.0)
+
+# Option B: Wave entrance (ripple effect)
+self.play(Wave([OrganicFadeIn(o) for o in items], delay=0.1), duration=2.0)
+
+# Option C: Swarm (explode outward from center)
+self.play(Swarm([OrganicFadeIn(o) for o in items], cx=135, cy=240), duration=2.0)
+```
+
+---
+
+## Pattern: Ambient Life (Updaters)
+
+```python
+from pixelengine import alive, hover, orbit_idle, wind_sway
+
+# Gentle breathing on ambient objects
+bg_circle.add_updater(alive())
+
+# Float up and down
+subtitle.add_updater(hover(height=4))
+
+# Slow circular drift
+particle.add_updater(orbit_idle())
+
+# Lateral wind push
+tree.add_updater(wind_sway())
+```
+
+---
+
+## Pattern: Simulations (Pendulum, Spring, Orbital)
+
+```python
+from pixelengine import Pendulum, Spring, OrbitalSystem, Rope, FluidParticles
+
+# Pendulum
+pendulum = Pendulum(pivot_x=135, pivot_y=50, length=100, angle=30,
+                    bob_color="#FF004D", rod_color="#C2C3C7")
+self.add(pendulum)
+self.wait(5.0)  # Swings automatically
+
+# Spring
+spring = Spring(x1=135, y1=50, x2=135, y2=200, coils=8, color="#00E436")
+self.add(spring)
+
+# Orbital system
+orbits = OrbitalSystem(x=135, y=240)
+orbits.add_body(radius=15, distance=0, color="#FFEC27")   # Sun
+orbits.add_body(radius=5, distance=50, color="#29ADFF")   # Planet
+self.add(orbits)
+self.wait(5.0)
+```
+
+---
+
+## Pattern: Keyframe Timeline Animation
+
+```python
+from pixelengine import KeyframeTrack
+
+track = KeyframeTrack(obj)
+track.add(at=0.0, x=50,  y=400, opacity=0.0)
+track.add(at=0.3, x=135, y=240, opacity=1.0, easing="ease_out")
+track.add(at=0.7, x=135, y=240, scale_x=1.5)
+track.add(at=1.0, x=220, y=100, opacity=0.0, easing="ease_in")
+self.play(track.build(), duration=3.0)
+```
+
+---
+
+## Pattern: Path Animation (Bézier Curves)
+
+```python
+from pixelengine import BezierPath, CircularPath, FollowPath
+
+# Curved trajectory
+arc = BezierPath(start=(50, 400), control1=(135, 100),
+                 control2=(220, 100), end=(135, 300))
+self.play(FollowPath(ball, arc, rotate_along=True), duration=2.0)
+
+# Circular orbit
+orbit = CircularPath(center_x=135, center_y=240, radius=80)
+self.play(FollowPath(dot, orbit, loops=2), duration=4.0)
+```
+
+---
+
+## Pattern: Mind Map / Network Graph
+
+```python
+from pixelengine import NetworkGraph
+
+graph = NetworkGraph(x=L.MAIN_ZONE.x, y=L.MAIN_ZONE.y)
+graph.add_node("A", label="AI")
+graph.add_node("B", label="ML")
+graph.add_node("C", label="DL")
+graph.add_edge("A", "B")
+graph.add_edge("B", "C")
+self.add(graph)
+self.play(Create(graph), duration=2.0)
+```
+
+---
+
+## Pattern: Procedural Pixel Art (No Image Files)
+
+```python
+from pixelengine import PixelArtist
+
+# Character sprite
+knight = PixelArtist.character(style="knight", palette="pico8", x=135, y=300)
+self.add(knight)
+self.play(OrganicFadeIn(knight), duration=1.0)
+
+# Background
+forest = PixelArtist.background(style="forest", palette="gameboy", width=270, height=480)
+forest.z_index = -5
+self.add(forest)
+```
+Available styles: knight, wizard, robot, alien, ghost.
+Available palettes: pico8, gameboy, nes, pastel, neon, earth, ocean.
+
+---
+
+## Pattern: Terrain Generation
+
+```python
+from pixelengine import Terrain
+
+ground = Terrain(width=270, height=100, x=0, y=380, seed=42, color="#1D2B53")
+ground.z_index = -2
+self.add(ground)
+```
+
+---
+
+## Pattern: Textures (Not Flat Colors)
+
+```python
+from pixelengine import PatternTexture, GradientTexture, DitherTexture, NoiseTexture
+
+# Checkerboard floor
+floor = Rect(270, 50, x=135, y=455, color="#FFFFFF")
+floor.fill_texture = PatternTexture("checkerboard", cell_size=8, color1="#29ADFF", color2="#1D2B53")
+
+# Gradient background
+bg = Rect(270, 480, x=135, y=240, color="#FFFFFF")
+bg.fill_texture = GradientTexture(direction="vertical", color1="#0B0C10", color2="#1F2833")
+
+# Noise texture for organic look
+rock = Rect(40, 40, x=100, y=300, color="#FFFFFF")
+rock.fill_texture = NoiseTexture(scale=4, color1="#5F574F", color2="#8B7D6B")
+```
+
+---
+
+## Pattern: Rich Text Animation
+
+```python
+from pixelengine import PerCharacter, ScrambleReveal, TypeWriterPro, DynamicCaption
+
+# Staggered character reveal
+self.play(PerCharacter(text, "fade_in", lag=0.05), duration=2.0)
+
+# Matrix-style decode
+self.play(ScrambleReveal(text, charset="ABCXYZ0123"), duration=1.5)
+
+# Typewriter with blinking cursor
+self.play(TypeWriterPro(text, cursor=True, cursor_blink_rate=2), duration=2.0)
+```
+
+---
+
+## How to Debug
+
+1. **Visual check**: `python script.py --test-frame=2.0` → saves `test_frame.png`
+2. **Layout check**: `python script.py --dry-run` → prints object positions at each second
+3. **Lint check**: `pixelengine-lint script.py` → catches bad patterns and suggests improvements
+4. Portrait canvas bounds: X: 0→270, Y: 0→480. Center: (135, 240).
+5. Landscape canvas bounds: X: 0→480, Y: 0→270. Center: (240, 135).
+
+## Sound Effects Quick Reference
+
+```python
+# Dynamic contextual sounds (auto-generates based on mood)
+SoundFX.dynamic("success")     SoundFX.dynamic("reveal")
+SoundFX.dynamic("impact")      SoundFX.dynamic("wonder")
+SoundFX.dynamic("tension")     SoundFX.dynamic("celebration")
+SoundFX.dynamic("error")       SoundFX.dynamic("mystery")
+SoundFX.dynamic("transition")  SoundFX.dynamic("dismiss")
+
+# Instrument notes
+SoundFX.piano_note("C4")
+SoundFX.bell_note("E5")
+SoundFX.mallet_note("G5")
+```

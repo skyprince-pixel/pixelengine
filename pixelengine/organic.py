@@ -6,7 +6,7 @@ every animation feel handcrafted and organic rather than mechanically eased.
 """
 import math
 import random
-from pixelengine.animation import Animation, linear, get_easing, ease_out, ease_in_out
+from pixelengine.animation import Animation, linear, ease_out, ease_in_out
 from pixelengine.pobject import PObject
 
 

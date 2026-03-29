@@ -56,10 +56,10 @@ class Vec3:
         return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
 
     def normalized(self):
-        l = self.length()
-        if l < 1e-10:
+        vec_len = self.length()
+        if vec_len < 1e-10:
             return Vec3(0, 0, 0)
-        return Vec3(self.x / l, self.y / l, self.z / l)
+        return Vec3(self.x / vec_len, self.y / vec_len, self.z / vec_len)
 
     def to_tuple(self):
         return (self.x, self.y, self.z)

@@ -14,7 +14,6 @@ Usage::
     mountains = Terrain(width=480, height=270, style="mountains", seed=42)
     scene.add(mountains)
 """
-import math
 import numpy as np
 from PIL import Image
 from pixelengine.pobject import PObject

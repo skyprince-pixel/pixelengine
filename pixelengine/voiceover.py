@@ -260,7 +260,7 @@ class VoiceOver:
         for i, text in enumerate(texts, 1):
             _, dur = cls.generate(text, voice=voice, speed=speed, engine=engine)
             print(f"  [{i}/{total}] '{text[:40]}...' → {dur:.2f}s")
-        print(f"[VoiceOver] Preload complete.")
+        print("[VoiceOver] Preload complete.")
 
     @classmethod
     def clear_cache(cls):

@@ -4,8 +4,6 @@ Pixel-art-friendly textures: checkerboard, stripes, dithering, noise,
 gradients, animated and scrolling textures. Applied as fill patterns
 to shapes instead of flat colors.
 """
-import math
-import random
 from pixelengine.color import parse_color
 
 

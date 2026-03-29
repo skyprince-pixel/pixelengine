@@ -3,7 +3,6 @@
 Inspired by Manim's Create/GrowFromPoint/DrawBorderThenFill pattern.
 Objects gradually appear by growing, tracing borders, or sweeping into view.
 """
-import math
 from pixelengine.animation import Animation, linear
 from pixelengine.pobject import PObject
 from pixelengine.color import parse_color

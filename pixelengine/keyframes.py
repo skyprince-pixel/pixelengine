@@ -3,8 +3,7 @@
 Allows chaining complex multi-property animations on a single object,
 with per-keyframe easing and automatic property interpolation.
 """
-import math
-from pixelengine.animation import Animation, linear, get_easing, EASINGS
+from pixelengine.animation import Animation, linear, get_easing
 from pixelengine.pobject import PObject
 from pixelengine.color import parse_color
 

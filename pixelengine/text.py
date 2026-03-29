@@ -1,5 +1,4 @@
 """PixelEngine text — pixel font text rendering with built-in 5×7 bitmap font."""
-from PIL import Image
 from pixelengine.pobject import PObject
 from pixelengine.color import parse_color
 

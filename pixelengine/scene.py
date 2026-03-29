@@ -12,6 +12,11 @@ from pixelengine.lighting import LightingEngine
 from pixelengine.camerafx import CameraFXPipeline, DepthOfField
 
 
+class SilentExit(Exception):
+    """Raised to silently exit rendering (e.g. for --test-frame)."""
+    pass
+
+
 class Scene:
     """Base scene class. Subclass and override ``construct()`` to build animations.
 
@@ -58,6 +63,16 @@ class Scene:
         # Camera post-processing FX pipeline
         self._camera_fx = CameraFXPipeline()
 
+        # AI Debugging
+        self.dry_run: bool = "--dry-run" in sys.argv
+        self.test_frame_target: float = None
+        for arg in sys.argv:
+            if arg.startswith("--test-frame="):
+                try:
+                    self.test_frame_target = float(arg.split("=")[1])
+                except ValueError:
+                    pass
+
     # ── User overrides ──────────────────────────────────────
 
     def construct(self):
@@ -98,7 +113,6 @@ class Scene:
         """
         from pixelengine.color import parse_color
         self.canvas.background = parse_color(color)
-        import numpy as np
         self.canvas._bg_array[:, :] = self.canvas.background
         return self
 
@@ -285,7 +299,6 @@ class Scene:
             frame_count = self._frame_count + 1
             elapsed = time.time() - self._render_start_time
             fps = frame_count / elapsed if elapsed > 0 else 0
-            bar_w = 30
             # We don't know total frames ahead of time, so show a spinner + stats
             spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[frame_count % 10]
             sys.stdout.write(
@@ -317,6 +330,21 @@ class Scene:
 
         self.canvas.clear()
 
+        # AI Debugging: Dry-Run Layout Logging
+        if getattr(self, 'dry_run', False):
+            prev_sec = int(self._current_time - dt)
+            curr_sec = int(self._current_time)
+            if curr_sec > prev_sec:
+                print(f"\n[PixelEngine Dry-Run] t={curr_sec}s")
+                for obj in self._objects:
+                    if obj.visible:
+                        w = getattr(obj, 'width', 0)
+                        h = getattr(obj, 'height', 0)
+                        size_str = f", size {w}x{h}" if (w or h) else ""
+                        print(f"  - {obj.__class__.__name__} at ({int(obj.x)}, {int(obj.y)}){size_str}, z_index: {obj.z_index}")
+            self._frame_count += 1
+            return
+
         sorted_objects = sorted(self._objects, key=lambda o: o.z_index)
 
         for obj in sorted_objects:
@@ -328,10 +356,34 @@ class Scene:
                 orig_x, orig_y = obj.x, obj.y
                 screen_x, screen_y = self.camera.world_to_screen(obj.x, obj.y)
                 obj.x, obj.y = screen_x, screen_y
+
+                # Camera offset delta for multi-coordinate objects
+                dx = screen_x - orig_x
+                dy = screen_y - orig_y
+
+                # Line: transform x1,y1,x2,y2
+                orig_line = None
+                if hasattr(obj, 'x1') and hasattr(obj, 'x2'):
+                    orig_line = (obj.x1, obj.y1, obj.x2, obj.y2)
+                    obj.x1 = int(obj.x1 + dx)
+                    obj.y1 = int(obj.y1 + dy)
+                    obj.x2 = int(obj.x2 + dx)
+                    obj.y2 = int(obj.y2 + dy)
+
+                # Triangle/Polygon: transform points
+                orig_points = None
+                if hasattr(obj, 'points') and isinstance(getattr(obj, 'points', None), list):
+                    orig_points = list(obj.points)
+                    obj.points = [(int(px + dx), int(py + dy)) for px, py in obj.points]
+
                 try:
                     self._render_object(obj)
                 finally:
                     obj.x, obj.y = orig_x, orig_y
+                    if orig_line is not None:
+                        obj.x1, obj.y1, obj.x2, obj.y2 = orig_line
+                    if orig_points is not None:
+                        obj.points = orig_points
             else:
                 self._render_object(obj)
 
@@ -354,6 +406,13 @@ class Scene:
             self._renderer.add_frame(frame)
         self._frame_count += 1
 
+        # AI Debugging: Test Frame Extraction
+        if getattr(self, 'test_frame_target', None) is not None:
+            if self._current_time >= self.test_frame_target:
+                frame.save("test_frame.png")
+                print(f"\n[PixelEngine] Test frame saved to root: test_frame.png (t={self._current_time:.2f}s)")
+                raise SilentExit()
+
     def _render_object(self, obj):
         """Render a single object, applying per-object quality if needed."""
         quality = getattr(obj, 'render_quality', 1.0)
@@ -361,7 +420,6 @@ class Scene:
             obj.render(self.canvas)
         else:
             # Render to a temporary sub-canvas at adjusted resolution
-            from PIL import Image
             w = getattr(obj, 'width', 16) or 16
             h = getattr(obj, 'height', 16) or 16
             # Ensure reasonable size
@@ -432,7 +490,6 @@ class Scene:
 
         # Determine paths
         if output_path is None:
-            import inspect
             module = sys.modules.get(self.__class__.__module__)
             script_path = getattr(module, '__file__', sys.argv[0])
             script_name = os.path.splitext(os.path.basename(script_path))[0]
@@ -465,7 +522,10 @@ class Scene:
             self._renderer.open(tmp_video, self.config.output_width, self.config.output_height)
             
             # RUN CONSTRUCT AND STREAM FRAMES
-            self.construct()
+            try:
+                self.construct()
+            except SilentExit:
+                pass
             
             # Close renderer after all frames
             self._renderer.close()

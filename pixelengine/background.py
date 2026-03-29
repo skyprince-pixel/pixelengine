@@ -239,7 +239,7 @@ class ParallaxLayer(PObject):
             return
 
         img = self._image
-        w, h = img.width, img.height
+        w = img.width
         scroll_px = int(self._scroll_x) % w if w > 0 else 0
         ry = int(self.y)
 

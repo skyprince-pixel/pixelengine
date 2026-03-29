@@ -24,12 +24,9 @@ Usage::
     scene.play_sound(SoundFX.piano_note("C4", duration=0.5))
 """
 import math
-import struct
 import wave
 import io
-import os
 import subprocess
-import tempfile
 import numpy as np
 
 # Optional: Pydub for advanced audio mixing
@@ -42,14 +39,16 @@ except ImportError:
 # Optional: PyAV for in-memory audio/video muxing
 try:
     import av
-    HAS_PYAV = True
+    # Disabled by default on macOS due to QuickTime moov atom / H264 profile issues
+    # The ffmpeg subprocess is more reliable for valid .mp4 files
+    HAS_PYAV = False
 except ImportError:
     HAS_PYAV = False
 
 # Optional: Pedalboard for studio-grade effects
 try:
     from pedalboard import (
-        Pedalboard, Reverb, Chorus, Delay, Compressor, Gain,
+        Pedalboard, Reverb, Chorus, Delay, Compressor,
         HighpassFilter, LowpassFilter, Limiter, Bitcrush,
     )
     HAS_PEDALBOARD = True
@@ -206,7 +205,6 @@ def _sweep(freq_start: float, freq_end: float, duration: float,
            fade_out: bool = True) -> np.ndarray:
     """Generate a frequency sweep."""
     n = int(SAMPLE_RATE * duration)
-    t = np.linspace(0, duration, n, endpoint=False)
     freqs = np.linspace(freq_start, freq_end, n)
     phase = np.cumsum(freqs / SAMPLE_RATE) * 2 * np.pi
     if waveform == "square":

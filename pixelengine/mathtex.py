@@ -18,7 +18,6 @@ import io
 import numpy as np
 from PIL import Image
 from pixelengine.pobject import PObject
-from pixelengine.color import parse_color
 
 # matplotlib is a core dependency as of v0.7.0
 import matplotlib
@@ -88,7 +87,6 @@ class MathTex(PObject):
         fig.canvas.draw()
         bbox = text_obj.get_window_extent(fig.canvas.get_renderer())
         # Add small padding
-        pad = max(2, int(4 * self.scale))
         bbox = bbox.expanded(1.15, 1.25)
 
         fig.set_size_inches(bbox.width / effective_dpi,

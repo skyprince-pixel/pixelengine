@@ -55,6 +55,16 @@ class PixelConfig:
     def portrait(cls) -> "PixelConfig":
         """9:16 for YouTube Shorts (270×480 → 1080×1920 Full HD)."""
         return cls(canvas_width=270, canvas_height=480, upscale=4)
+        
+    @classmethod
+    def high_res_portrait(cls) -> "PixelConfig":
+        """High-detail 9:16 for smooth pixel art (540×960 → 1080×1920)."""
+        return cls(canvas_width=540, canvas_height=960, upscale=2)
+        
+    @classmethod
+    def high_res_landscape(cls) -> "PixelConfig":
+        """High-detail 16:9 for smooth pixel art (960×540 → 1920×1080)."""
+        return cls(canvas_width=960, canvas_height=540, upscale=2)
 
     @classmethod
     def square(cls) -> "PixelConfig":

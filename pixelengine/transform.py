@@ -3,10 +3,8 @@
 Inspired by Manim's Transform/ReplacementTransform. Smoothly morph one shape
 into another by interpolating vertices, positions, colors, and dimensions.
 """
-import math
-from pixelengine.animation import Animation, linear
+from pixelengine.animation import Animation
 from pixelengine.pobject import PObject
-from pixelengine.color import parse_color
 
 
 class MorphTo(Animation):

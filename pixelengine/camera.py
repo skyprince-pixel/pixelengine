@@ -1,5 +1,4 @@
 """PixelEngine camera — viewport control with pan, zoom, follow, and shake."""
-import math
 import random
 from pixelengine.pobject import PObject
 

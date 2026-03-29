@@ -5,10 +5,7 @@ fast in-memory encoding. Falls back to ffmpeg subprocess if PyAV is not
 installed.
 """
 import subprocess
-import sys
-import time
 import shutil
-from pathlib import Path
 from PIL import Image
 import numpy as np
 from pixelengine.config import PixelConfig
@@ -16,7 +13,9 @@ from pixelengine.config import PixelConfig
 # Try importing PyAV
 try:
     import av
-    HAS_PYAV = True
+    # Disabled by default on macOS due to QuickTime moov atom / H264 profile issues
+    # The ffmpeg subprocess is more reliable for valid .mp4 files
+    HAS_PYAV = False
 except ImportError:
     HAS_PYAV = False
 

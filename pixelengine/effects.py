@@ -164,8 +164,12 @@ class ParticleEmitter(PObject):
         # Update and draw particles
         alive = []
         dt = 1.0 / self._fps
-        from PIL import ImageDraw
-        draw = ImageDraw.Draw(canvas._pil_image)
+        from PIL import Image as _PILImage, ImageDraw
+        # Render particles into a temporary image, then blit onto the canvas.
+        # This avoids writing directly to canvas._pil_image which bypasses
+        # the NumPy pixel buffer and can cause flickering/lost draws.
+        tmp = _PILImage.new("RGBA", (canvas.width, canvas.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(tmp)
         for p in self._particles:
             p.life -= dt
             if p.life <= 0:
@@ -212,6 +216,7 @@ class ParticleEmitter(PObject):
 
             alive.append(p)
         self._particles = alive
+        canvas.blit(tmp, 0, 0)
 
     @property
     def particle_count(self) -> int:
@@ -571,10 +576,15 @@ class Trail(PObject):
         base_color = self.trail_color or self.target.color
         n = len(self._positions)
 
+        # Render trail into a temporary image, then blit onto the canvas.
+        # This avoids writing directly to canvas._pil_image which bypasses
+        # the NumPy pixel buffer and can cause flickering/lost draws.
+        from PIL import Image as _PILImage, ImageDraw
+        tmp = _PILImage.new("RGBA", (canvas.width, canvas.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(tmp)
+
         if self.style == "line" and n >= 2:
             # Draw connected line segments
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(canvas._pil_image)
             for i in range(n - 1):
                 x1, y1 = self._positions[i]
                 x2, y2 = self._positions[i + 1]
@@ -583,8 +593,6 @@ class Trail(PObject):
                 draw.line([(x1, y1), (x2, y2)], fill=color, width=self.size)
         else:
             # Dots style (default)
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(canvas._pil_image)
             for i, (px, py) in enumerate(self._positions):
                 alpha = int(255 * (i + 1) / n * 0.6)
                 color = (base_color[0], base_color[1], base_color[2], alpha)
@@ -592,6 +600,8 @@ class Trail(PObject):
                     draw.point((px, py), fill=color)
                 else:
                     draw.rectangle([px, py, px + self.size - 1, py + self.size - 1], fill=color)
+
+        canvas.blit(tmp, 0, 0)
 
 
 class ScreenFlash(PObject):
@@ -866,7 +876,6 @@ class GlitchTransition:
 
         # RGB channel offset bars (using numpy slice assignment)
         num_bars = max(1, int(5 * t))
-        draw = ImageDraw.Draw(Image.fromarray(pixels))
         for _ in range(num_bars):
             bar_y = self._rng.randint(0, h - 1)
             bar_h_val = self._rng.randint(1, max(1, int(6 * t)))
@@ -949,6 +958,7 @@ class ShatterTransition:
         tile_h = h // self.pieces
 
         img = Image.new("RGBA", (w, h), self.color if alpha > 0.1 else (0, 0, 0, 0))
+        from PIL import ImageDraw
         draw = ImageDraw.Draw(img)
 
         tiled_alpha = int(255 * max(0, 1.0 - alpha * 1.5))

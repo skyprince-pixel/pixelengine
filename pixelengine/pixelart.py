@@ -1,11 +1,9 @@
 """PixelEngine PixelArtist — procedural pixel art generation for characters, backgrounds, and effects."""
 import math
 import random
-from PIL import Image, ImageDraw
-from pixelengine.pobject import PObject
+from PIL import Image
 from pixelengine.sprite import Sprite
-from pixelengine.background import GradientBackground, ParallaxLayer
-from pixelengine.color import parse_color, PICO8, NES, GAMEBOY
+from pixelengine.color import parse_color
 
 
 # ═══════════════════════════════════════════════════════════
@@ -248,7 +246,7 @@ class PixelArtist:
             x, y: Position on canvas.
             seed: Random seed for reproducibility.
         """
-        rng = random.Random(seed)
+        random.Random(seed)
         img = Image.new("RGBA", (size + 4, size + 4), (0, 0, 0, 0))
         c = parse_color(color)
         eye_c = parse_color(eye_color)
@@ -401,7 +399,7 @@ class PixelArtist:
             x, y: Position on canvas.
             seed: Random seed for reproducibility.
         """
-        rng = random.Random(seed)
+        random.Random(seed)
         w = max(8, int(size * 0.8))
         h = size
         if w % 2 == 1:
@@ -778,7 +776,7 @@ class PixelArtist:
         # Trees (back to front: 2 layers)
         for layer in range(2):
             count = tree_count // 2
-            t = layer / max(1, 1)
+            layer / max(1, 1)
             tree_color = colors[min(layer, len(colors) - 1)]
             trunk_c = colors[3] if len(colors) > 3 else parse_color("#AB5236")
             # Darken far layer
@@ -1044,7 +1042,7 @@ class PixelArtist:
             x, y: Position.
             seed: Random seed.
         """
-        rng = random.Random(seed)
+        random.Random(seed)
         c = parse_color(color)
         frame_images = []
 
@@ -1145,7 +1143,7 @@ class PixelArtist:
         Returns:
             dict with "background" (Sprite) and "layers" (list of Sprites).
         """
-        rng = random.Random(seed)
+        random.Random(seed)
         s = seed or 42
 
         if theme == "fantasy":

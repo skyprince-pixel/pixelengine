@@ -3,9 +3,8 @@
 Provides PerCharacter, PerWord, ScrambleReveal, and TypeWriterPro for
 advanced text animation control.
 """
-import math
 import random
-from pixelengine.animation import Animation, linear, get_easing
+from pixelengine.animation import linear, get_easing
 from pixelengine.pobject import PObject
 
 

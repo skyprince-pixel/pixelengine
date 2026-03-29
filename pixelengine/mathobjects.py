@@ -3,10 +3,7 @@
 Inspired by Manim's mobjects. NumberLine, BarChart, Graph, Axes, and
 ValueTracker for reactive educational animations.
 """
-import math
 from pixelengine.pobject import PObject
-from pixelengine.shapes import Rect, Line, Circle
-from pixelengine.text import PixelText
 from pixelengine.color import parse_color
 
 
@@ -291,7 +288,7 @@ class BarChart(PObject):
                                                    lbl_y, label_color)
                     else:
                         # Fall back to main 5x7 font for letters
-                        from pixelengine.text import _render_glyph, GLYPH_WIDTH, GLYPH_SPACING
+                        from pixelengine.text import _render_glyph
                         glyph = _render_glyph(ch)
                         for row_idx, row in enumerate(glyph):
                             for col_idx, pixel in enumerate(row):

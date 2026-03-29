@@ -308,7 +308,7 @@ class LightingEngine:
         # Auto-inject a full-brightness ambient light if none exists.
         # This prevents accidental dark scenes when users only add
         # PointLight or DirectionalLight without an explicit AmbientLight.
-        has_ambient = any(isinstance(l, AmbientLight) for l in lights)
+        has_ambient = any(isinstance(lgt, AmbientLight) for lgt in lights)
         if not has_ambient:
             lights = [AmbientLight(intensity=1.0)] + list(lights)
 
