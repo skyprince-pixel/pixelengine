@@ -1,4 +1,4 @@
-__version__ = "0.7.2"
+__version__ = "0.8.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -308,6 +308,36 @@ from pixelengine.cinematic import CinematicScene, CleanScene
 # TIP: Use VStack/HStack to auto-arrange children. Never manually compute offsets.
 from pixelengine.group import Group, VStack, HStack
 
+# ── Declarative Scene DSL (v0.8.0) ─────────────────────────
+# TIP: Use SceneBuilder + slide() for zero-coordinate-math scene construction.
+#      Agents describe slides as structured data, not imperative code.
+from pixelengine.scene_dsl import (
+    SceneBuilder, slide,
+    equation, text_block, shape_item, object_3d,
+    chart_item, vector_item, physics_sim, custom_content,
+)
+
+# ── Structured Validation (v0.8.0) ─────────────────────────
+# TIP: Use SceneValidator.validate() for machine-readable diagnostics.
+#      Replace --test-frame visual inspection with structured JSON reports.
+from pixelengine.validate import SceneValidator
+
+# ── Scene Presets (v0.8.0) ─────────────────────────────────
+# TIP: Subclass a preset (TitleCardScene, RevealScene, etc.) and set class
+#      attributes instead of writing full construct() methods.
+from pixelengine.presets import (
+    TitleCardScene, RevealScene, ComparisonScene,
+    TimelineScene, PhysicsDemoScene, MathProofScene, DataVizScene,
+)
+
+# ── Agent Pipeline (v0.8.0) ────────────────────────────────
+# TIP: Use AgentPipeline.run() for end-to-end lint→validate→render.
+from pixelengine.agent_pipeline import AgentPipeline, PipelineResult
+
+# ── Inline Linter API (v0.8.0) ─────────────────────────────
+# TIP: Use lint_source(code_string) for programmatic linting.
+from pixelengine.cli_lint import lint_source
+
 __all__ = [
     # Core
     "PixelConfig", "Scene", "CinematicScene", "CleanScene", "PObject",
@@ -402,4 +432,17 @@ __all__ = [
     "PixelArtist", "PALETTES", "SKIN_TONES",
     # Color
     "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
+    # v0.8.0 — Declarative Scene DSL
+    "SceneBuilder", "slide",
+    "equation", "text_block", "shape_item", "object_3d",
+    "chart_item", "vector_item", "physics_sim", "custom_content",
+    # v0.8.0 — Structured Validation
+    "SceneValidator",
+    # v0.8.0 — Scene Presets
+    "TitleCardScene", "RevealScene", "ComparisonScene",
+    "TimelineScene", "PhysicsDemoScene", "MathProofScene", "DataVizScene",
+    # v0.8.0 — Agent Pipeline
+    "AgentPipeline", "PipelineResult",
+    # v0.8.0 — Inline Linter
+    "lint_source",
 ]

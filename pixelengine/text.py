@@ -144,6 +144,14 @@ class PixelText(PObject):
         lines = self.display_text.split('\n')
         return len(lines) * (GLYPH_HEIGHT + LINE_SPACING) - LINE_SPACING
 
+    @property
+    def width(self) -> int:
+        return self.text_width * self.scale
+
+    @property
+    def height(self) -> int:
+        return self.text_height * self.scale
+
     def render(self, canvas):
         if not self.visible:
             return

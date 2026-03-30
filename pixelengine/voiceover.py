@@ -27,12 +27,6 @@ import hashlib
 import os
 import time
 import numpy as np
-try:
-    import torch
-    HAS_TORCH = True
-except ImportError:
-    torch = None
-    HAS_TORCH = False
 
 # ── Cache directory ─────────────────────────────────────────
 _CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "pixelengine", "tts")
@@ -48,8 +42,11 @@ _kokoro_sr = 24000
 
 def _get_device() -> str:
     """Auto-detect best available device: mps (Apple Silicon) > cpu."""
-    if not HAS_TORCH:
+    try:
+        import torch
+    except ImportError:
         return "cpu"
+
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         return "mps"
     if torch.cuda.is_available():

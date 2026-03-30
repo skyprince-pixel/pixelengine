@@ -31,12 +31,13 @@ class Group(PObject):
             self.y = y
 
     def _sync_center(self):
-        """Recalculate the center point based on current children positions."""
+        """Recalculate the center point based on the bounding box of children."""
         if not self._child_items: return
+        # Account for object dimensions when computing bounding box
         min_x = min(c.x for c in self._child_items)
-        max_x = max(c.x for c in self._child_items)
+        max_x = max(c.x + getattr(c, 'width', 0) for c in self._child_items)
         min_y = min(c.y for c in self._child_items)
-        max_y = max(c.y for c in self._child_items)
+        max_y = max(c.y + getattr(c, 'height', 0) for c in self._child_items)
         self._x = (min_x + max_x) // 2
         self._y = (min_y + max_y) // 2
 
@@ -82,6 +83,16 @@ class Group(PObject):
         self._sync_center()
         return self
 
+    def move_to(self, x: int, y: int):
+        """Move the group so its center is at (x, y).
+        
+        This is a convenience wrapper that sets self.x and self.y,
+        which automatically repositions all children.
+        """
+        self.x = x
+        self.y = y
+        return self
+
 
 class VStack(Group):
     """Automatically arranges children in a vertical column."""
@@ -95,18 +106,26 @@ class VStack(Group):
 
     def arrange(self):
         if not self._child_items: return
+        
+        # First pass: stack vertically
         current_y = 0
         for i, c in enumerate(self._child_items):
             h = getattr(c, 'height', 10)
             c.y = current_y
             current_y += h + self.spacing
-            
-            # X alignment (top-left semantics)
-            if self.align == "center":
+
+        # Second pass: horizontal alignment
+        if self.align == "center":
+            # Center each child by offsetting based on half its width
+            # so the visual center of each child aligns on x=0
+            for c in self._child_items:
+                w = getattr(c, 'width', 0)
+                c.x = -w // 2
+        elif self.align == "left":
+            for c in self._child_items:
                 c.x = 0
-            elif self.align == "left":
-                c.x = 0
-            elif self.align == "right":
+        elif self.align == "right":
+            for c in self._child_items:
                 w = getattr(c, 'width', 10)
                 c.x = -w
                 

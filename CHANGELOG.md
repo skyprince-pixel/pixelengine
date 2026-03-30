@@ -1,7 +1,21 @@
 # Changelog
 
 All notable changes to PixelEngine will be documented in this file.
- 
+
+## [0.8.0] — 2026-03-30
+
+### Added — Agentic Workflow Optimization
+- **Declarative Scene DSL** (`scene_dsl.py`): `SceneBuilder` + `slide()` for zero-coordinate-math scene construction. Agents describe slides as structured data with `equation()`, `text_block()`, `shape_item()`, `object_3d()`, `chart_item()`, `vector_item()`, `physics_sim()`, and `custom_content()` helpers.
+- **Structured Validation** (`validate.py`): `SceneValidator.validate()` returns machine-readable JSON diagnostics — bounds checking, overlap detection, dead air detection, and feature coverage analysis. Replaces visual `--test-frame` PNG inspection.
+- **Scene Presets** (`presets.py`): 7 pre-built scene templates — `TitleCardScene`, `RevealScene`, `ComparisonScene`, `TimelineScene`, `PhysicsDemoScene`, `MathProofScene`, `DataVizScene`. Configure via class attributes to reduce boilerplate ~60%.
+- **Agent Pipeline** (`agent_pipeline.py`): `AgentPipeline.run()` orchestrates lint → validate → test_frame → render in a single programmable API call. Returns structured `PipelineResult` with status, issues, and diagnostics.
+- **Inline Linter API**: `lint_source(code_string)` function returns structured dict (`{violations, suggestions, passed, feature_coverage}`) for programmatic linting — agents can lint before writing files.
+- **`--validate` CLI flag**: `python script.py --validate` runs structural validation and prints JSON report. Supports `--validate=3.0` for specific timestamps.
+- **`lint=True` render option**: `Scene.render(lint=True)` runs the linter before encoding — halts on violations.
+
+### Improved
+- **Compose checkpoint/resume**: `Compose.render(resume=True)` resumes from last-completed scene after crashes. Checkpoints saved as `.checkpoint` JSON files.
+
  ## [0.6.0] — 2026-03-27
  
  ### Added

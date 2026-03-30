@@ -66,10 +66,20 @@ class Scene:
         # AI Debugging
         self.dry_run: bool = "--dry-run" in sys.argv
         self.test_frame_target: float = None
+        self.validate_mode: bool = False
+        self.validate_at: list = None
         for arg in sys.argv:
             if arg.startswith("--test-frame="):
                 try:
                     self.test_frame_target = float(arg.split("=")[1])
+                except ValueError:
+                    pass
+            elif arg == "--validate":
+                self.validate_mode = True
+            elif arg.startswith("--validate="):
+                self.validate_mode = True
+                try:
+                    self.validate_at = [float(arg.split("=")[1])]
                 except ValueError:
                     pass
 
@@ -459,7 +469,7 @@ class Scene:
 
     # ── Video output ────────────────────────────────────────
 
-    def render(self, output_path: str = None):
+    def render(self, output_path: str = None, lint: bool = False):
         """Build the scene and encode to video with audio.
 
         If `output_path` is None, automatically organizes generated files into:
@@ -470,7 +480,40 @@ class Scene:
         Args:
             output_path: Optional exact path for the output video file. If provided,
                          bypasses the auto-organization system.
+            lint: If True, run the linter on the source file before rendering.
+                  Halts on violations.
         """
+        # ── Validate mode (--validate flag) ──
+        if getattr(self, 'validate_mode', False):
+            from pixelengine.validate import SceneValidator
+            source_path = getattr(sys.modules.get(self.__class__.__module__), '__file__', None)
+            report = SceneValidator.validate(
+                self.__class__, config=self.config,
+                at=getattr(self, 'validate_at', None),
+                source_path=source_path,
+            )
+            SceneValidator.print_report(report)
+            # Output JSON to stdout for agent parsing
+            import json
+            print(json.dumps(report, indent=2))
+            return
+
+        # ── Pre-render lint check ──
+        if lint:
+            from pixelengine.cli_lint import lint_source
+            module = sys.modules.get(self.__class__.__module__)
+            script_path = getattr(module, '__file__', None)
+            if script_path and os.path.exists(script_path):
+                with open(script_path, 'r') as f:
+                    source = f.read()
+                result = lint_source(source)
+                if not result['passed']:
+                    print(f"[PixelEngine] ❌ Lint failed with {len(result['violations'])} violation(s):")
+                    for v in result['violations']:
+                        print(f"  ✗ {v}")
+                    print("Fix violations before rendering. Use lint=False to skip.")
+                    return
+                print(f"[PixelEngine] ✅ Lint passed ({len(result['suggestions'])} suggestions)")
         import shutil
 
         print(f"[PixelEngine] Building scene: {self.__class__.__name__}")

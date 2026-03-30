@@ -19,10 +19,7 @@ import numpy as np
 from PIL import Image
 from pixelengine.pobject import PObject
 
-# matplotlib is a core dependency as of v0.7.0
-import matplotlib
-matplotlib.use("Agg")  # Non-interactive backend
-import matplotlib.pyplot as plt
+
 
 
 class MathTex(PObject):
@@ -63,6 +60,10 @@ class MathTex(PObject):
 
     def _render_tex(self):
         """Rasterize the LaTeX string into a PIL Image."""
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
         effective_dpi = int(self.dpi * self.scale)
         fg_color = self.get_render_color()
         # Normalize to 0-1 for matplotlib

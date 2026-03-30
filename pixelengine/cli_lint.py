@@ -331,6 +331,143 @@ def check_script(filepath):
     return True
 
 
+def lint_source(source: str) -> dict:
+    """Lint a Python source string and return structured results.
+
+    This is the programmatic API for AI agents. Instead of printing
+    to stdout and returning a boolean, it returns a machine-readable dict.
+
+    Args:
+        source: Python source code string to analyze.
+
+    Returns:
+        Dict with keys:
+          - violations: list of violation message strings
+          - suggestions: list of suggestion message strings
+          - passed: bool — True if no violations
+          - feature_coverage: dict of feature name → bool
+
+    Usage::
+
+        from pixelengine.cli_lint import lint_source
+
+        result = lint_source(code_string)
+        if not result["passed"]:
+            for v in result["violations"]:
+                print(v)
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as e:
+        return {
+            "violations": [f"Syntax Error: {e}"],
+            "suggestions": [],
+            "passed": False,
+            "feature_coverage": {},
+        }
+
+    warnings = []
+    suggestions = []
+    has_scene = False
+
+    found = {
+        "organic_anim": False, "construction_anim": False,
+        "advanced_anim": False, "transition": False, "particles": False,
+        "rich_text_anim": False, "camera_fx": False, "lighting": False,
+        "texture": False, "bg_elements": False, "updaters": False,
+        "layout": False, "voiceover": False, "sound_fx": False,
+        "camera_shake": False, "set_background": False,
+        "setup_atmosphere": False,
+    }
+
+    all_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for base in node.bases:
+                if isinstance(base, ast.Name) and base.id in (
+                    "Scene", "CinematicScene", "CleanScene",
+                ):
+                    has_scene = True
+
+        if isinstance(node, ast.Name):
+            all_names.add(node.id)
+
+        if isinstance(node, ast.Call):
+            func_name = None
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                func_name = node.func.attr
+
+            if func_name:
+                if func_name in ORGANIC_ANIMS:
+                    found["organic_anim"] = True
+                if func_name in CONSTRUCTION_ANIMS:
+                    found["construction_anim"] = True
+                if func_name in ADVANCED_ANIMS:
+                    found["advanced_anim"] = True
+                if func_name in TRANSITION_CLASSES:
+                    found["transition"] = True
+                if func_name in PARTICLE_CLASSES:
+                    found["particles"] = True
+                if func_name in TEXT_ANIMS:
+                    found["rich_text_anim"] = True
+                if func_name in CAMERA_FX_CLASSES:
+                    found["camera_fx"] = True
+                if func_name in LIGHTING_CLASSES:
+                    found["lighting"] = True
+                if func_name in TEXTURE_CLASSES:
+                    found["texture"] = True
+                if func_name in BG_ELEMENTS:
+                    found["bg_elements"] = True
+                if func_name in UPDATER_FUNCS:
+                    found["updaters"] = True
+                if func_name in LAYOUT_USAGE:
+                    found["layout"] = True
+                if func_name in ("play_voiceover", "generate", "narrate"):
+                    found["voiceover"] = True
+                if func_name == "dynamic" or func_name in (
+                    "piano_note", "bell_note", "mallet_note",
+                ):
+                    found["sound_fx"] = True
+                if func_name == "shake":
+                    found["camera_shake"] = True
+                if func_name == "set_background":
+                    found["set_background"] = True
+                if func_name == "setup_atmosphere":
+                    found["setup_atmosphere"] = True
+
+                if func_name == "MoveTo":
+                    warnings.append(
+                        f"Line {node.lineno}: 'MoveTo' → use 'OrganicMoveTo' instead."
+                    )
+                elif func_name == "FadeIn":
+                    warnings.append(
+                        f"Line {node.lineno}: 'FadeIn' → use 'OrganicFadeIn' instead."
+                    )
+                elif func_name == "TypeWriter":
+                    warnings.append(
+                        f"Line {node.lineno}: 'TypeWriter' → use 'TypeWriterPro' instead."
+                    )
+
+    if not has_scene:
+        warnings.append("No Scene subclass found.")
+
+    if not found["construction_anim"]:
+        suggestions.append("Add construction animations (Create, DrawBorderThenFill).")
+    if not found["organic_anim"]:
+        suggestions.append("Add organic animations (OrganicMoveTo, Cascade).")
+    if not found["sound_fx"]:
+        suggestions.append("Add sound effects (SoundFX.dynamic()).")
+
+    return {
+        "violations": warnings,
+        "suggestions": suggestions,
+        "passed": len(warnings) == 0,
+        "feature_coverage": found,
+    }
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: pixelengine-lint <script.py>")

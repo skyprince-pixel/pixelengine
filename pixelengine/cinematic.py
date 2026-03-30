@@ -25,21 +25,23 @@ class CinematicScene(Scene):
     - `transition()` — easy scene transitions
     """
 
-    def play_cinematic_reveal(self, objects, style="cyberpunk", duration=1.5):
+    def play_cinematic_reveal(self, objects, style="normal", duration=1.5):
         """Perform a highly complex reveal animation tailored by style.
         
         Args:
             objects: A list of objects or a single object to reveal.
-            style: The thematic style ("cyberpunk", "soft", "hero").
+            style: The thematic style ("normal", "cyberpunk", "soft", "hero").
+                   Default is "normal" — a clean cascade with no extra FX.
             duration: The duration of the reveal.
         """
         if not isinstance(objects, (list, tuple)):
             objects = [objects]
             
-        # Add basic vignette and DoF
-        has_vignette = any(isinstance(fx, Vignette) for fx in self._camera_fx._effects)
-        if not has_vignette:
-            self.add_camera_fx(Vignette(intensity=0.5))
+        if style not in ("normal",):
+            # Add basic vignette and DoF only for cinematic styles
+            has_vignette = any(isinstance(fx, Vignette) for fx in self._camera_fx._effects)
+            if not has_vignette:
+                self.add_camera_fx(Vignette(intensity=0.5))
 
         if style == "cyberpunk":
             # 1. Add Chromatic Aberration
@@ -69,9 +71,13 @@ class CinematicScene(Scene):
             self.play(ParticleBurst.disperse(self, x=center_x, y=center_y), duration=0.2, sound=SoundFX.dynamic("reveal", intensity=1.0))
             self.play(Cascade([OrganicFadeIn(o) for o in objects], feel="bouncy", lag=0.15), duration=duration - 0.2)
 
+        elif style == "normal":
+            # Normal Cascade fade-in with no sound or extra effects
+            self.play(Cascade([OrganicFadeIn(o) for o in objects], feel="floaty", lag=0.2), duration=duration)
+
         else: # "soft"
             # 1. Smooth cascade
-            self.play(Cascade([OrganicFadeIn(o) for o in objects], feel="gentle", lag=0.2), duration=duration, sound=SoundFX.dynamic("wonder", intensity=0.6))
+            self.play(Cascade([OrganicFadeIn(o) for o in objects], feel="floaty", lag=0.2), duration=duration, sound=SoundFX.dynamic("wonder", intensity=0.6))
 
     # ── Convenience Helper Methods ──────────────────────────
 
@@ -232,9 +238,13 @@ class CinematicScene(Scene):
                 "bg": "#1D2B53", "grad": ("#1D2B53", "#29366F"),
                 "accent": "#FF004D", "tint": "#FFF1E8", "ambient": 0.2,
             },
+            "normal": {
+                "bg": "#0B0C10", "grad": ("#0B0C10", "#1F2833"),
+                "accent": "#29ADFF", "tint": None, "ambient": 1.0,
+            },
             "clean": {
                 "bg": "#EAEAEA", "grad": ("#F5F5F5", "#DCDCDC"),
-                "accent": "#FF004D", "tint": None, "ambient": 0.5,
+                "accent": "#FF004D", "tint": None, "ambient": 1.0,
             },
         }
 
@@ -249,29 +259,33 @@ class CinematicScene(Scene):
             bg_rect.z_index = -10
             self.add(bg_rect)
 
-        if grid and style != "clean":
-            g = Grid(cell_size=20, canvas_width=cw, canvas_height=ch, color="#FFFFFF")
-            g.opacity = 0.04
-            g.z_index = -9
-            self.add(g)
+        if style != "normal":
+            if grid and style != "clean":
+                g = Grid(cell_size=20, canvas_width=cw, canvas_height=ch, color="#FFFFFF")
+                g.opacity = 0.04
+                g.z_index = -9
+                self.add(g)
 
-        # Camera FX
-        self.add_camera_fx(Vignette(intensity=0.45))
-        if p["tint"]:
-            from pixelengine.color import parse_color as _pc
-            tint_rgb = _pc(p["tint"])[:3]
-            self.add_camera_fx(ColorGrade(preset=None, tint=tint_rgb, strength=0.12))
+            # Camera FX
+            self.add_camera_fx(Vignette(intensity=0.45))
+            if p["tint"]:
+                from pixelengine.color import parse_color as _pc
+                tint_rgb = _pc(p["tint"])[:3]
+                self.add_camera_fx(ColorGrade(preset=None, tint=tint_rgb, strength=0.12))
 
-        if style == "retro":
-            self.add_camera_fx(CRTScanlines(line_spacing=2, darkness=0.25))
+            if style == "retro":
+                self.add_camera_fx(CRTScanlines(line_spacing=2, darkness=0.25))
 
-        # Lighting
-        self.add_light(AmbientLight(intensity=p["ambient"]))
-        self._accent_light = PointLight(
-            x=cx, y=cy, radius=int(max(cw, ch) * 0.55),
-            color=p["accent"], intensity=1.2
-        )
-        self.add_light(self._accent_light)
+            # Lighting
+            self.add_light(AmbientLight(intensity=p["ambient"]))
+            self._accent_light = PointLight(
+                x=cx, y=cy, radius=int(max(cw, ch) * 0.55),
+                color=p["accent"], intensity=1.2
+            )
+            self.add_light(self._accent_light)
+        else:
+            # "normal" mode: skip lighting entirely for maximum performance
+            pass
 
 
 class CleanScene(Scene):

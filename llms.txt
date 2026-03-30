@@ -436,8 +436,9 @@ self.play(TypeWriterPro(text, cursor=True, cursor_blink_rate=2), duration=2.0)
 1. **Visual check**: `python script.py --test-frame=2.0` → saves `test_frame.png`
 2. **Layout check**: `python script.py --dry-run` → prints object positions at each second
 3. **Lint check**: `pixelengine-lint script.py` → catches bad patterns and suggests improvements
-4. Portrait canvas bounds: X: 0→270, Y: 0→480. Center: (135, 240).
-5. Landscape canvas bounds: X: 0→480, Y: 0→270. Center: (240, 135).
+4. **Structured validation**: `python script.py --validate` → JSON report of bounds/overlap/dead air issues
+5. Portrait canvas bounds: X: 0→270, Y: 0→480. Center: (135, 240).
+6. Landscape canvas bounds: X: 0→480, Y: 0→270. Center: (240, 135).
 
 ## Sound Effects Quick Reference
 
@@ -454,3 +455,142 @@ SoundFX.piano_note("C4")
 SoundFX.bell_note("E5")
 SoundFX.mallet_note("G5")
 ```
+
+---
+
+## Pattern: Declarative Scene DSL (v0.8.0 — FASTEST for agents)
+
+Instead of writing 50+ lines of imperative code, use `SceneBuilder` + `slide()`:
+
+```python
+from pixelengine import (
+    CinematicScene, PixelConfig, SceneBuilder, slide,
+    equation, text_block, physics_sim,
+)
+
+class MyShort(CinematicScene):
+    def construct(self):
+        SceneBuilder(self).run([
+            slide("intro",
+                atmosphere="dark",
+                title="THE GOLDEN RATIO",
+                subtitle="Nature's Perfect Number",
+                reveal="cyberpunk",
+                narration="Did you know the golden ratio appears everywhere?",
+            ),
+            slide("equation",
+                content=[
+                    equation(r"\varphi = \frac{1+\sqrt{5}}{2}"),
+                    text_block("≈ 1.618...", style="highlight"),
+                ],
+                narration="Phi equals one plus root five, divided by two.",
+                transition="glitch",
+            ),
+            slide("physics",
+                content=[
+                    physics_sim(gravity=200, objects=[
+                        {"type": "ball", "radius": 10, "color": "#FF004D", "bounce": 0.8},
+                        {"type": "floor", "y": 450},
+                    ]),
+                ],
+                narration="Even gravity follows mathematical beauty.",
+            ),
+        ])
+
+if __name__ == "__main__":
+    MyShort(PixelConfig.portrait()).render()
+```
+
+Content helpers: `equation(tex)`, `text_block(text, style)`, `shape_item(type)`,
+`object_3d(type, orbit=True)`, `chart_item(type, values, labels)`,
+`vector_item(type)`, `physics_sim(gravity, objects)`, `custom_content(callback)`.
+
+---
+
+## Pattern: Scene Presets (v0.8.0 — Zero construct())
+
+```python
+from pixelengine import TitleCardScene, RevealScene, DataVizScene, PixelConfig, Compose
+
+class Intro(TitleCardScene):
+    title = "THE GOLDEN RATIO"
+    subtitle = "Nature's Perfect Number"
+    atmosphere = "dark"
+    reveal_style = "cyberpunk"
+
+class Main(RevealScene):
+    items = [
+        {"type": "equation", "content": r"\varphi = \frac{1+\sqrt{5}}{2}"},
+        {"type": "text", "content": "≈ 1.618"},
+    ]
+    narration = "The golden ratio is approximately 1.618..."
+    atmosphere = "dark"
+
+class Data(DataVizScene):
+    values = [1, 1, 2, 3, 5, 8, 13]
+    labels = ["1", "1", "2", "3", "5", "8", "13"]
+    narration = "The Fibonacci sequence approaches phi."
+
+if __name__ == "__main__":
+    Compose(Intro, Main, Data, config=PixelConfig.portrait()).render()
+```
+
+Available presets: `TitleCardScene`, `RevealScene`, `ComparisonScene`,
+`TimelineScene`, `PhysicsDemoScene`, `MathProofScene`, `DataVizScene`.
+
+---
+
+## Pattern: Agent Pipeline (v0.8.0 — End-to-End)
+
+```python
+from pixelengine.agent_pipeline import AgentPipeline
+
+# Full pipeline: lint → validate → test_frame → render
+result = AgentPipeline.full("examples/my_short.py")
+print(result.status)       # "SUCCESS" | "LINT_FAIL" | "VALIDATE_FAIL"
+print(result.output_path)  # auto-detected output path
+print(result.issues)       # structured issue list
+
+# Quick pipeline (lint + render only)
+result = AgentPipeline.quick("examples/my_short.py")
+
+# Custom steps
+result = AgentPipeline.run("examples/my_short.py",
+    steps=["lint", "validate@2.0", "render"],
+    on_failure="report"
+)
+```
+
+---
+
+## Pattern: Inline Linting (v0.8.0)
+
+```python
+from pixelengine.cli_lint import lint_source
+
+# Lint a code string before writing to file
+result = lint_source(code_string)
+print(result["passed"])           # True/False
+print(result["violations"])       # list of error strings
+print(result["suggestions"])      # list of suggestion strings
+print(result["feature_coverage"]) # dict of feature → bool
+
+# Or lint on render
+MyScene(PixelConfig.portrait()).render(lint=True)  # Halts on violations
+```
+
+---
+
+## Pattern: Structured Validation (v0.8.0)
+
+```python
+from pixelengine.validate import SceneValidator
+
+report = SceneValidator.validate(MyScene, config=PixelConfig.portrait(), at=[1.0, 3.0])
+# Returns: {"status": "PASS"|"WARN"|"FAIL", "issues": [...], "coverage": {...}}
+
+# CLI usage:
+# python script.py --validate          # Full report
+# python script.py --validate=3.0      # At specific timestamp
+```
+
