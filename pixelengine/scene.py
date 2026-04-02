@@ -414,6 +414,8 @@ class Scene:
 
         if hasattr(self, '_renderer') and self._renderer:
             self._renderer.add_frame(frame)
+        if hasattr(self, '_frames') and isinstance(self._frames, list):
+            self._frames.append(frame)
         self._frame_count += 1
 
         # AI Debugging: Test Frame Extraction

@@ -297,7 +297,7 @@ class VMorph(Animation):
             return list(zip(new_xs.tolist(), new_ys.tolist()))
         elif len(points) > n:
             # Subsample uniformly
-            indices = [int(i * (len(points) - 1) / (n - 1)) for i in range(n)]
+            indices = [int(i * (len(points) - 1) / max(1, n - 1)) for i in range(n)]
             return [points[i] for i in indices]
         return points
 

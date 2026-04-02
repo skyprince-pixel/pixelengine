@@ -168,7 +168,7 @@ class TileMap(PObject):
             tileset: The TileSet to use for rendering.
             path: Path to a text file with the map data.
         """
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             lines = [line.rstrip('\n') for line in f.readlines()]
         return cls(tileset, lines, x=x, y=y)
 

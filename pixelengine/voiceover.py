@@ -55,30 +55,36 @@ def _get_device() -> str:
 
 
 def _get_chatterbox():
-    """Get or initialize the Chatterbox Turbo model."""
+    """Get or initialize the Chatterbox model."""
     global _chatterbox_instance, _chatterbox_sr
     if _chatterbox_instance is not None:
         return _chatterbox_instance
 
+    # Try Turbo first (newer versions), then standard ChatterboxTTS
     try:
         from chatterbox.tts_turbo import ChatterboxTurboTTS, REPO_ID
         from huggingface_hub import snapshot_download
-    except ImportError:
-        raise ImportError(
-            "chatterbox-tts is not installed. Run: pip install chatterbox-tts"
+        device = _get_device()
+        print(f"[VoiceOver] Downloading/Loading Chatterbox Turbo on device: {device}")
+        local_path = snapshot_download(
+            repo_id=REPO_ID,
+            token=False,
+            allow_patterns=["*.safetensors", "*.json", "*.txt", "*.pt", "*.model"]
         )
+        _chatterbox_instance = ChatterboxTurboTTS.from_local(local_path, device=device)
+        _chatterbox_sr = _chatterbox_instance.sr
+    except (ImportError, ModuleNotFoundError):
+        try:
+            from chatterbox.tts import ChatterboxTTS
+        except ImportError:
+            raise ImportError(
+                "chatterbox-tts is not installed. Run: pip install chatterbox-tts"
+            )
+        device = _get_device()
+        print(f"[VoiceOver] Downloading/Loading Chatterbox on device: {device}")
+        _chatterbox_instance = ChatterboxTTS.from_pretrained(device=device)
+        _chatterbox_sr = getattr(_chatterbox_instance, 'sr', 24000)
 
-    device = _get_device()
-    print(f"[VoiceOver] Downloading/Loading Chatterbox Turbo on device: {device}")
-
-    local_path = snapshot_download(
-        repo_id=REPO_ID,
-        token=False,  
-        allow_patterns=["*.safetensors", "*.json", "*.txt", "*.pt", "*.model"]
-    )
-
-    _chatterbox_instance = ChatterboxTurboTTS.from_local(local_path, device=device)
-    _chatterbox_sr = _chatterbox_instance.sr
     print(f"[VoiceOver] Chatterbox loaded (sample rate: {_chatterbox_sr})")
     return _chatterbox_instance
 

@@ -39,9 +39,7 @@ except ImportError:
 # Optional: PyAV for in-memory audio/video muxing
 try:
     import av
-    # Disabled by default on macOS due to QuickTime moov atom / H264 profile issues
-    # The ffmpeg subprocess is more reliable for valid .mp4 files
-    HAS_PYAV = False
+    HAS_PYAV = True
 except ImportError:
     HAS_PYAV = False
 
@@ -451,7 +449,7 @@ class SoundFX:
     def to_wav_bytes(self) -> bytes:
         """Export as 24-bit WAV file bytes."""
         buf = io.BytesIO()
-        pcm_32 = (self.samples * 8388607).astype(np.int32)
+        pcm_32 = (np.clip(self.samples, -1.0, 1.0) * 8388607).astype(np.int32)
         pcm_bytes = pcm_32.astype('<i4').tobytes()
         raw = bytearray(len(pcm_32) * 3)
         raw[0::3] = pcm_bytes[0::4]
@@ -1048,7 +1046,7 @@ class SoundTimeline:
         """Mix and export as 24-bit WAV bytes."""
         mixed = self.mix(total_duration)
         buf = io.BytesIO()
-        pcm_32 = (mixed * 8388607).astype(np.int32)
+        pcm_32 = (np.clip(mixed, -1.0, 1.0) * 8388607).astype(np.int32)
         pcm_bytes = pcm_32.astype('<i4').tobytes()
         raw = bytearray(len(pcm_32) * 3)
         raw[0::3] = pcm_bytes[0::4]

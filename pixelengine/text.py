@@ -136,13 +136,13 @@ class PixelText(PObject):
         """Width of the full text in pixels (before scaling)."""
         lines = self.display_text.split('\n')
         max_len = max(len(line) for line in lines) if lines else 0
-        return max_len * (GLYPH_WIDTH + GLYPH_SPACING) - GLYPH_SPACING
+        return max(0, max_len * (GLYPH_WIDTH + GLYPH_SPACING) - GLYPH_SPACING)
 
     @property
     def text_height(self) -> int:
         """Height of the full text in pixels (before scaling)."""
         lines = self.display_text.split('\n')
-        return len(lines) * (GLYPH_HEIGHT + LINE_SPACING) - LINE_SPACING
+        return max(0, len(lines) * (GLYPH_HEIGHT + LINE_SPACING) - LINE_SPACING)
 
     @property
     def width(self) -> int:

@@ -13,9 +13,7 @@ from pixelengine.config import PixelConfig
 # Try importing PyAV
 try:
     import av
-    # Disabled by default on macOS due to QuickTime moov atom / H264 profile issues
-    # The ffmpeg subprocess is more reliable for valid .mp4 files
-    HAS_PYAV = False
+    HAS_PYAV = True
 except ImportError:
     HAS_PYAV = False
 

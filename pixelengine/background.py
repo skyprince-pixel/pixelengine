@@ -52,6 +52,8 @@ class GradientBackground(PObject):
         self.color_bottom = parse_color(color_bottom)
         self.direction = direction  # "vertical" or "horizontal"
         self.z_index = -100
+        self._cached_img = None
+        self._cache_key = None
 
     def render(self, canvas):
         if not self.visible:
@@ -59,7 +61,7 @@ class GradientBackground(PObject):
 
         # Cache the gradient image — it never changes
         cache_key = (canvas.width, canvas.height, self.direction,
-                     self.color_top, self.color_bottom)
+                     self.color_top, self.color_bottom, self.opacity)
         if getattr(self, '_cache_key', None) == cache_key and self._cached_img is not None:
             canvas.blit(self._cached_img, 0, 0)
             return

@@ -157,7 +157,7 @@ class ParticleEmitter(PObject):
                 self.emitting = False
             elif self.burst == 0:
                 self._emit_timer += 1
-                if self._emit_timer >= max(1, 12 / self.rate):
+                if self._emit_timer >= max(1, 12 / max(0.001, self.rate)):
                     self._spawn(1)
                     self._emit_timer = 0
 
@@ -701,6 +701,8 @@ class Grid(PObject):
 
     def render(self, canvas):
         if not self.visible:
+            return
+        if self.cell_size <= 0:
             return
         color = self.get_render_color()
         ox, oy = int(self.x), int(self.y)

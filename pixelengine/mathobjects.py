@@ -141,7 +141,10 @@ class NumberLine(PObject):
 
     def val_to_x(self, val: float) -> int:
         """Convert a numeric value to screen x-coordinate."""
-        t = (val - self.min_val) / (self.max_val - self.min_val)
+        rng = self.max_val - self.min_val
+        if rng == 0:
+            return int(self.x)
+        t = (val - self.min_val) / rng
         return int(self.x + t * self.width)
 
     def render(self, canvas):
@@ -156,6 +159,8 @@ class NumberLine(PObject):
             canvas.set_pixel(int(self.x) + px, int(self.y), color)
 
         # Tick marks and labels
+        if self.step <= 0:
+            return
         val = self.min_val
         while val <= self.max_val:
             tick_x = self.val_to_x(val)
@@ -352,8 +357,10 @@ class Axes(PObject):
 
     def val_to_screen(self, vx: float, vy: float) -> tuple:
         """Convert data coordinates to screen pixel coordinates."""
-        sx = self.x + (vx - self.x_min) / (self.x_max - self.x_min) * self.width
-        sy = self.y + self.height - (vy - self.y_min) / (self.y_max - self.y_min) * self.height
+        x_rng = self.x_max - self.x_min
+        y_rng = self.y_max - self.y_min
+        sx = self.x + ((vx - self.x_min) / x_rng * self.width if x_rng != 0 else self.width / 2)
+        sy = self.y + self.height - ((vy - self.y_min) / y_rng * self.height if y_rng != 0 else self.height / 2)
         return int(sx), int(sy)
 
     def render(self, canvas):
@@ -378,13 +385,16 @@ class Axes(PObject):
         # Tick marks
         if self.show_ticks:
             # X ticks
-            vx = self.x_min
-            while vx <= self.x_max:
-                sx, _ = self.val_to_screen(vx, 0)
-                for dy in range(-self.tick_size, self.tick_size + 1):
-                    canvas.set_pixel(sx, origin_sy + dy, color)
-                vx += self.x_step
+            if self.x_step > 0:
+                vx = self.x_min
+                while vx <= self.x_max:
+                    sx, _ = self.val_to_screen(vx, 0)
+                    for dy in range(-self.tick_size, self.tick_size + 1):
+                        canvas.set_pixel(sx, origin_sy + dy, color)
+                    vx += self.x_step
             # Y ticks
+            if self.y_step <= 0:
+                return
             vy = self.y_min
             while vy <= self.y_max:
                 _, sy = self.val_to_screen(0, vy)
