@@ -220,6 +220,7 @@ class Animation:
         self.easing = get_easing(easing)
         self._started = False
         self._completed = False
+        self._events = []  # list of (threshold, callback, fired)
 
     def interpolate(self, raw_alpha: float):
         """Called each frame with raw alpha (0→1). Applies easing."""
@@ -229,9 +230,43 @@ class Animation:
             self.on_start()
             self._started = True
         self.update(eased)
+        # Fire mid-animation events
+        for i, (threshold, callback, fired) in enumerate(self._events):
+            if not fired and alpha >= threshold:
+                self._events[i] = (threshold, callback, True)
+                callback()
         if alpha >= 1.0 and not self._completed:
             self._completed = True
             self.on_complete()
+
+    def on(self, at: float, callback):
+        """Register a callback to fire when alpha reaches ``at``.
+
+        Usage::
+
+            anim = MoveTo(obj, x=200, y=100)
+            anim.on(0.5, lambda: print("halfway!"))
+            scene.play(anim, duration=2.0)
+        """
+        self._events.append((at, callback, False))
+        return self
+
+    def then(self, animation, weight: float = 1.0):
+        """Chain another animation to play after this one.
+
+        Returns a ``ChainedAnimation`` that plays animations sequentially
+        with per-segment weight control.
+
+        Usage::
+
+            scene.play(
+                MoveTo(obj, 200, 100).then(Scale(obj, 2.0)).then(FadeOut(obj)),
+                duration=3.0,
+            )
+        """
+        chain = ChainedAnimation(self)
+        chain._add(animation, weight)
+        return chain
 
     def on_start(self):
         """Called once when animation begins. Override to capture start state."""
@@ -409,30 +444,117 @@ class AnimationGroup:
             anim.interpolate(alpha)
 
 
+class ChainedAnimation:
+    """Run animations sequentially with per-segment weight control.
+
+    Built via ``Animation.then()`` — not typically instantiated directly.
+
+    Usage::
+
+        chain = MoveTo(obj, 200, 100).then(Scale(obj, 2.0), weight=2).then(FadeOut(obj))
+        scene.play(chain, duration=3.0)
+    """
+
+    def __init__(self, first_animation):
+        self._segments = [(first_animation, 1.0)]
+
+    def _add(self, animation, weight: float = 1.0):
+        self._segments.append((animation, weight))
+
+    def then(self, animation, weight: float = 1.0):
+        """Chain another animation after the current ones."""
+        self._add(animation, weight)
+        return self
+
+    def interpolate(self, alpha: float):
+        total_weight = sum(w for _, w in self._segments)
+        if total_weight <= 0:
+            return
+        cumulative = 0.0
+        for i, (anim, weight) in enumerate(self._segments):
+            seg_start = cumulative / total_weight
+            seg_end = (cumulative + weight) / total_weight
+            cumulative += weight
+
+            if alpha < seg_start:
+                continue
+            if alpha >= seg_end:
+                # Finalize past segments
+                if not getattr(anim, '_chain_finalized', False):
+                    anim.interpolate(1.0)
+                    anim._chain_finalized = True
+                continue
+            # Active segment
+            local_alpha = (alpha - seg_start) / (seg_end - seg_start)
+            anim.interpolate(max(0.0, min(1.0, local_alpha)))
+            return
+
+        # alpha >= 1.0 — finalize all
+        for anim, _ in self._segments:
+            if not getattr(anim, '_chain_finalized', False):
+                anim.interpolate(1.0)
+                anim._chain_finalized = True
+
+
 class Sequence:
     """Run multiple animations one after another (serial).
 
-    Each animation gets an equal share of the total duration.
+    Each animation gets an equal share of the total duration,
+    or custom weights via the ``weights`` parameter.
+
+    Usage::
+
+        Sequence(anim1, anim2, anim3)                    # equal timing
+        Sequence(anim1, anim2, anim3, weights=[2, 1, 3]) # weighted timing
     """
 
-    def __init__(self, *animations):
+    def __init__(self, *animations, weights=None):
         self.animations = list(animations)
+        self.weights = weights
 
     def interpolate(self, alpha: float):
         n = len(self.animations)
         if n == 0:
             return
-        # Find which animation is active
-        segment = 1.0 / n
-        idx = min(int(alpha / segment), n - 1)
-        # Finalize all previous animations that haven't been finalized yet
-        for i in range(idx):
-            if not getattr(self.animations[i], '_seq_finalized', False):
-                self.animations[i].interpolate(1.0)
-                self.animations[i]._seq_finalized = True
-        local_alpha = (alpha - idx * segment) / segment
-        local_alpha = max(0.0, min(1.0, local_alpha))
-        self.animations[idx].interpolate(local_alpha)
+
+        if self.weights is not None and len(self.weights) == n:
+            # Weighted timing
+            total_w = sum(self.weights)
+            if total_w <= 0:
+                return
+            cumulative = 0.0
+            for i, (anim, w) in enumerate(zip(self.animations, self.weights)):
+                seg_start = cumulative / total_w
+                seg_end = (cumulative + w) / total_w
+                cumulative += w
+                if alpha < seg_start:
+                    continue
+                if alpha >= seg_end:
+                    if not getattr(anim, '_seq_finalized', False):
+                        anim.interpolate(1.0)
+                        anim._seq_finalized = True
+                    continue
+                # Active segment
+                local_alpha = (alpha - seg_start) / (seg_end - seg_start)
+                anim.interpolate(max(0.0, min(1.0, local_alpha)))
+                return
+            # Finalize all at end
+            for anim in self.animations:
+                if not getattr(anim, '_seq_finalized', False):
+                    anim.interpolate(1.0)
+                    anim._seq_finalized = True
+        else:
+            # Equal timing (original behavior)
+            segment = 1.0 / n
+            idx = min(int(alpha / segment), n - 1)
+            for i in range(idx):
+                if not getattr(self.animations[i], '_seq_finalized', False):
+                    self.animations[i].interpolate(1.0)
+                    self.animations[i]._seq_finalized = True
+            local_alpha = (alpha - idx * segment) / segment
+            local_alpha = max(0.0, min(1.0, local_alpha))
+            self.animations[idx].interpolate(local_alpha)
+
         # Clean up finalization flags when sequence completes
         if alpha >= 1.0:
             for anim in self.animations:

@@ -1,4 +1,5 @@
 """PixelEngine shapes — pixel-perfect geometric primitives."""
+import math
 from PIL import Image, ImageDraw
 from pixelengine.pobject import PObject
 
@@ -40,6 +41,13 @@ class Rect(PObject):
                         tc = (*tc[:3], int(tc[3] * self.opacity))
                         img.putpixel((px, py), tc)
                 self.fill_texture.advance_frame()
+            elif self.fill_gradient is not None:
+                # Gradient fill: pixel by pixel
+                for py in range(self.height):
+                    for px in range(self.width):
+                        gc = self.fill_gradient.sample(px, py, self.width, self.height)
+                        gc = (*gc[:3], int(gc[3] * self.opacity))
+                        img.putpixel((px, py), gc)
             else:
                 draw.rectangle(
                     [0, 0, self.width - 1, self.height - 1], fill=color
@@ -64,6 +72,86 @@ class Rect(PObject):
         return (
             f"Rect({self.width}×{self.height} at ({self.x},{self.y}), "
             f"color={self.color})"
+        )
+
+
+class RRect(PObject):
+    """Pixel-perfect rounded rectangle.
+
+    Usage::
+
+        card = RRect(80, 40, radius=6, x=100, y=50, color="#29ADFF")
+        bubble = RRect(60, 20, radius=4, color="#FFF1E8", filled=True)
+    """
+
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        radius: int = 4,
+        x: int = 0,
+        y: int = 0,
+        color: str = "#FFFFFF",
+        filled: bool = True,
+        border_width: int = 1,
+    ):
+        super().__init__(x=x, y=y, color=color)
+        self.width = width
+        self.height = height
+        self.radius = radius
+        self.filled = filled
+        self.border_width = border_width
+
+    def render(self, canvas):
+        if not self.visible:
+            return
+        if self.width <= 0 or self.height <= 0:
+            return
+        color = self.get_render_color()
+        img = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        r = min(self.radius, self.width // 2, self.height // 2)
+        if self.filled:
+            if self.fill_texture is not None:
+                # Draw rounded rect mask then apply texture
+                draw.rounded_rectangle(
+                    [0, 0, self.width - 1, self.height - 1],
+                    radius=r, fill=(255, 255, 255, 255),
+                )
+                for py in range(self.height):
+                    for px in range(self.width):
+                        if img.getpixel((px, py))[3] > 0:
+                            tc = self.fill_texture.get_pixel(px, py)
+                            tc = (*tc[:3], int(tc[3] * self.opacity))
+                            img.putpixel((px, py), tc)
+                        else:
+                            img.putpixel((px, py), (0, 0, 0, 0))
+                self.fill_texture.advance_frame()
+            else:
+                draw.rounded_rectangle(
+                    [0, 0, self.width - 1, self.height - 1],
+                    radius=r, fill=color,
+                )
+        else:
+            for i in range(self.border_width):
+                draw.rounded_rectangle(
+                    [i, i, self.width - 1 - i, self.height - 1 - i],
+                    radius=max(0, r - i), outline=color,
+                )
+        canvas.blit(img, int(self.x), int(self.y))
+
+    @property
+    def center_x(self) -> int:
+        return int(self.x + self.width // 2)
+
+    @property
+    def center_y(self) -> int:
+        return int(self.y + self.height // 2)
+
+    def __repr__(self) -> str:
+        return (
+            f"RRect({self.width}×{self.height} r={self.radius} "
+            f"at ({self.x},{self.y}), color={self.color})"
         )
 
 
@@ -93,12 +181,18 @@ class Circle(PObject):
         if self.filled:
             # Filled circle: test each pixel against radius²
             r_sq = self.radius * self.radius
+            has_gradient = self.fill_gradient is not None
             for dy in range(-self.radius, self.radius + 1):
                 for dx in range(-self.radius, self.radius + 1):
                     if dx * dx + dy * dy <= r_sq:
                         px, py = cx + dx, cy + dy
                         if 0 <= px < size and 0 <= py < size:
-                            img.putpixel((px, py), color)
+                            if has_gradient:
+                                gc = self.fill_gradient.sample(px, py, size, size)
+                                gc = (*gc[:3], int(gc[3] * self.opacity))
+                                img.putpixel((px, py), gc)
+                            else:
+                                img.putpixel((px, py), color)
         else:
             # Bresenham circle outline
             self._bresenham_circle(img, cx, cy, self.radius, color)

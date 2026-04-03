@@ -91,6 +91,18 @@ class Scene:
             "Subclass Scene and implement construct()"
         )
 
+    def on_frame(self, t: float, dt: float):
+        """Called every frame with current time and delta time.
+
+        Override this for global per-frame logic (cross-object checks,
+        procedural effects, etc.).
+
+        Args:
+            t: Current scene time in seconds.
+            dt: Time since last frame (1/fps).
+        """
+        pass
+
     # ── Object management ───────────────────────────────────
 
     def add(self, *objects) -> "Scene":
@@ -321,6 +333,9 @@ class Scene:
         if hasattr(self, 'physics') and self.physics is not None:
             self.physics.step(dt)
 
+        # User on_frame hook
+        self.on_frame(self._current_time, dt)
+
         # Run updaters on all objects
         for obj in list(self._objects):
             # Propagate scene FPS to objects that need it
@@ -426,7 +441,12 @@ class Scene:
                 raise SilentExit()
 
     def _render_object(self, obj):
-        """Render a single object, applying per-object quality if needed."""
+        """Render a single object, applying per-object quality and blend mode."""
+        # Set active blend mode on canvas for objects that call canvas.blit()
+        blend_mode = getattr(obj, 'blend_mode', 'normal')
+        prev_blend = self.canvas._active_blend_mode
+        self.canvas._active_blend_mode = blend_mode
+
         quality = getattr(obj, 'render_quality', 1.0)
         if abs(quality - 1.0) < 0.01:
             obj.render(self.canvas)
@@ -449,6 +469,9 @@ class Scene:
                 int(orig_x), int(orig_y),
                 quality,
             )
+
+        # Restore previous blend mode
+        self.canvas._active_blend_mode = prev_blend
 
     def _sync_camera_focus(self):
         """Sync camera focus point with DepthOfField effect."""

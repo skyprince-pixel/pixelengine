@@ -19,6 +19,7 @@ class PObject:
         self.scale_x: float = 1.0
         self.scale_y: float = 1.0
         self.fill_texture = None         # Texture object for patterned fills
+        self.fill_gradient = None        # LinearGradient or RadialGradient
         self._children: list = []
         self._updaters: list = []        # Per-frame update callbacks: fn(obj, dt)
 
@@ -29,6 +30,9 @@ class PObject:
 
         # Per-object quality control
         self.render_quality: float = 1.0  # 0.25=chunky, 1.0=normal, 2.0=smooth
+
+        # Blend mode: "normal", "additive", "multiply", "screen", "overlay"
+        self.blend_mode: str = "normal"
 
     # ── Position ────────────────────────────────────────────
 
@@ -115,6 +119,57 @@ class PObject:
         self._updaters.clear()
         return self
 
+    # ── Relative Positioning ──────────────────────────────────
+
+    def relative_to(self, other: "PObject", position: str = "above",
+                    offset: int = 10) -> "PObject":
+        """Position this object relative to another.
+
+        Args:
+            other: The reference PObject.
+            position: One of "above", "below", "left_of", "right_of",
+                      "centered_on".
+            offset: Pixel distance from the reference object.
+
+        Usage::
+
+            label.relative_to(circle, position="above", offset=10)
+        """
+        ow = getattr(other, 'width', 0) or 0
+        oh = getattr(other, 'height', 0) or 0
+        sw = getattr(self, 'width', 0) or 0
+        sh = getattr(self, 'height', 0) or 0
+
+        if position == "above":
+            self.x = other.x + ow // 2 - sw // 2
+            self.y = other.y - sh - offset
+        elif position == "below":
+            self.x = other.x + ow // 2 - sw // 2
+            self.y = other.y + oh + offset
+        elif position == "left_of":
+            self.x = other.x - sw - offset
+            self.y = other.y + oh // 2 - sh // 2
+        elif position == "right_of":
+            self.x = other.x + ow + offset
+            self.y = other.y + oh // 2 - sh // 2
+        elif position == "centered_on":
+            self.x = other.x + ow // 2 - sw // 2
+            self.y = other.y + oh // 2 - sh // 2
+        return self
+
+    # ── Animation Builder ──────────────────────────────────
+
+    @property
+    def animate(self) -> "_AnimationBuilder":
+        """Fluent animation builder — Manim-style property animations.
+
+        Usage::
+
+            scene.play(obj.animate.move_to(200, 100).set_opacity(0.5), duration=1.0)
+            scene.play(obj.animate.set_color("#FF004D"), duration=0.5)
+        """
+        return _AnimationBuilder(self)
+
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
@@ -122,6 +177,104 @@ class PObject:
             f"color={self.color}, "
             f"opacity={self.opacity})"
         )
+
+
+class _AnimationBuilder:
+    """Proxy that records property changes and produces an Animation.
+
+    Not instantiated directly — use ``obj.animate`` instead.
+    """
+
+    def __init__(self, target: "PObject"):
+        self._target = target
+        self._changes = []  # list of (property_name, value) or (method_name, args, kwargs)
+
+    def move_to(self, x: int, y: int) -> "_AnimationBuilder":
+        self._changes.append(("_move_to", (x, y)))
+        return self
+
+    def move_by(self, dx: int, dy: int) -> "_AnimationBuilder":
+        self._changes.append(("_move_by", (dx, dy)))
+        return self
+
+    def set_opacity(self, opacity: float) -> "_AnimationBuilder":
+        self._changes.append(("opacity", opacity))
+        return self
+
+    def set_color(self, color) -> "_AnimationBuilder":
+        self._changes.append(("color", parse_color(color)))
+        return self
+
+    def scale(self, factor: float) -> "_AnimationBuilder":
+        self._changes.append(("_scale", factor))
+        return self
+
+    def rotate(self, degrees: float) -> "_AnimationBuilder":
+        self._changes.append(("_rotate", degrees))
+        return self
+
+    def interpolate(self, raw_alpha: float):
+        """Called by scene.play() — interpolates all recorded changes."""
+        alpha = max(0.0, min(1.0, raw_alpha))
+
+        if not hasattr(self, '_started') or not self._started:
+            self._started = True
+            self._start_state = {
+                'x': self._target.x,
+                'y': self._target.y,
+                'opacity': self._target.opacity,
+                'color': self._target.color,
+                'scale_x': self._target.scale_x,
+                'scale_y': self._target.scale_y,
+                'angle': getattr(self._target, 'angle', 0),
+            }
+            self._targets = {}
+            self._targets['x'] = self._start_state['x']
+            self._targets['y'] = self._start_state['y']
+            self._targets['opacity'] = self._start_state['opacity']
+            self._targets['color'] = self._start_state['color']
+            self._targets['scale_x'] = self._start_state['scale_x']
+            self._targets['scale_y'] = self._start_state['scale_y']
+            self._targets['angle'] = self._start_state['angle']
+
+            for change in self._changes:
+                if change[0] == "_move_to":
+                    self._targets['x'] = change[1][0]
+                    self._targets['y'] = change[1][1]
+                elif change[0] == "_move_by":
+                    self._targets['x'] = self._start_state['x'] + change[1][0]
+                    self._targets['y'] = self._start_state['y'] + change[1][1]
+                elif change[0] == "opacity":
+                    self._targets['opacity'] = change[1]
+                elif change[0] == "color":
+                    self._targets['color'] = change[1]
+                elif change[0] == "_scale":
+                    self._targets['scale_x'] = self._start_state['scale_x'] * change[1]
+                    self._targets['scale_y'] = self._start_state['scale_y'] * change[1]
+                elif change[0] == "_rotate":
+                    self._targets['angle'] = self._start_state['angle'] + change[1]
+
+        s = self._start_state
+        t = self._targets
+        a = alpha
+
+        self._target.x = s['x'] + (t['x'] - s['x']) * a
+        self._target.y = s['y'] + (t['y'] - s['y']) * a
+        self._target.opacity = s['opacity'] + (t['opacity'] - s['opacity']) * a
+        self._target.scale_x = s['scale_x'] + (t['scale_x'] - s['scale_x']) * a
+        self._target.scale_y = s['scale_y'] + (t['scale_y'] - s['scale_y']) * a
+
+        if t.get('angle') != s.get('angle'):
+            self._target.angle = s['angle'] + (t['angle'] - s['angle']) * a
+
+        if t['color'] != s['color']:
+            sc, tc = s['color'], t['color']
+            self._target.color = (
+                int(sc[0] + (tc[0] - sc[0]) * a),
+                int(sc[1] + (tc[1] - sc[1]) * a),
+                int(sc[2] + (tc[2] - sc[2]) * a),
+                int(sc[3] + (tc[3] - sc[3]) * a),
+            )
 
 
 # ═══════════════════════════════════════════════════════════

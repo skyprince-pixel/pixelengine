@@ -71,6 +71,10 @@ class Object3D(PObject):
         color = self.get_render_color()
         projected = self.project_vertices(canvas.width, canvas.height)
 
+        # Draw filled faces if enabled
+        if self.render_faces and self.faces:
+            self._render_filled_faces(canvas, projected, color)
+
         # Draw edges
         for i, j in self.edges:
             p1 = projected[i]
@@ -78,6 +82,98 @@ class Object3D(PObject):
             if p1 is None or p2 is None:
                 continue
             self._draw_line(canvas, p1[0], p1[1], p2[0], p2[1], color)
+
+    def _render_filled_faces(self, canvas, projected, edge_color):
+        """Render filled faces with painter's algorithm and flat shading."""
+        transform = self.get_transform()
+        face_data = []
+
+        for face_indices in self.faces:
+            # Check all vertices are valid
+            pts = [projected[i] for i in face_indices]
+            if any(p is None for p in pts):
+                continue
+
+            # Calculate face center depth for painter's algorithm
+            avg_depth = sum(p[2] for p in pts) / len(pts)
+
+            # Calculate face normal for flat shading
+            if len(face_indices) >= 3:
+                world_verts = [transform.transform_vec3(self.vertices[i]) for i in face_indices]
+                v0 = world_verts[0]
+                v1 = world_verts[1]
+                v2 = world_verts[2]
+                # Cross product of two edges
+                e1 = Vec3(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z)
+                e2 = Vec3(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z)
+                nx = e1.y * e2.z - e1.z * e2.y
+                ny = e1.z * e2.x - e1.x * e2.z
+                nz = e1.x * e2.y - e1.y * e2.x
+                n_len = math.sqrt(nx * nx + ny * ny + nz * nz)
+                if n_len > 0:
+                    nx, ny, nz = nx / n_len, ny / n_len, nz / n_len
+                else:
+                    nx, ny, nz = 0, 0, 1
+
+                # Simple directional light from upper-left-front
+                light_dir = (0.3, -0.5, -0.8)
+                l_len = math.sqrt(sum(d * d for d in light_dir))
+                lx, ly, lz = light_dir[0] / l_len, light_dir[1] / l_len, light_dir[2] / l_len
+
+                # Lambert diffuse
+                dot = max(0.0, -(nx * lx + ny * ly + nz * lz))
+                shade = 0.3 + 0.7 * dot  # ambient + diffuse
+
+                # Back-face culling
+                if nz > 0:
+                    continue
+            else:
+                shade = 0.5
+
+            screen_pts = [(p[0], p[1]) for p in pts]
+            face_data.append((avg_depth, screen_pts, shade))
+
+        # Painter's algorithm: sort by depth (far to near)
+        face_data.sort(key=lambda f: f[0], reverse=True)
+
+        for _, screen_pts, shade in face_data:
+            fc = self.face_color or self.color
+            if isinstance(fc, str):
+                fc = parse_color(fc)
+            shaded = (
+                int(fc[0] * shade),
+                int(fc[1] * shade),
+                int(fc[2] * shade),
+                int(fc[3] * self.opacity),
+            )
+            self._fill_polygon(canvas, screen_pts, shaded)
+
+    @staticmethod
+    def _fill_polygon(canvas, points, color):
+        """Scanline fill a convex polygon on the canvas."""
+        if len(points) < 3:
+            return
+        min_y = max(0, min(p[1] for p in points))
+        max_y = min(canvas.height - 1, max(p[1] for p in points))
+
+        for y in range(min_y, max_y + 1):
+            intersections = []
+            n = len(points)
+            for i in range(n):
+                p1 = points[i]
+                p2 = points[(i + 1) % n]
+                y1, y2 = p1[1], p2[1]
+                if y1 == y2:
+                    continue
+                if min(y1, y2) <= y < max(y1, y2):
+                    x = p1[0] + (y - y1) * (p2[0] - p1[0]) / (y2 - y1)
+                    intersections.append(int(x))
+            intersections.sort()
+            for i in range(0, len(intersections) - 1, 2):
+                x_start = max(0, intersections[i])
+                x_end = min(canvas.width - 1, intersections[i + 1])
+                for x in range(x_start, x_end + 1):
+                    canvas.set_pixel(x, y, color)
 
     @staticmethod
     def _draw_line(canvas, x1, y1, x2, y2, color):
@@ -128,6 +224,15 @@ class Cube3D(Object3D):
             (0, 1), (1, 2), (2, 3), (3, 0),  # Back face
             (4, 5), (5, 6), (6, 7), (7, 4),  # Front face
             (0, 4), (1, 5), (2, 6), (3, 7),  # Connecting edges
+        ]
+        # 6 faces (vertex indices, counter-clockwise from outside)
+        self.faces = [
+            [0, 1, 2, 3],  # Back
+            [5, 4, 7, 6],  # Front
+            [4, 0, 3, 7],  # Left
+            [1, 5, 6, 2],  # Right
+            [4, 5, 1, 0],  # Top
+            [3, 2, 6, 7],  # Bottom
         ]
 
 
@@ -202,6 +307,14 @@ class Pyramid3D(Object3D):
         self.edges = [
             (0, 1), (1, 2), (2, 3), (3, 0),  # Base
             (0, 4), (1, 4), (2, 4), (3, 4),  # Sides to apex
+        ]
+        # 5 faces: 1 base + 4 triangular sides
+        self.faces = [
+            [3, 2, 1, 0],  # Base (bottom, facing down)
+            [0, 1, 4],     # Side 1
+            [1, 2, 4],     # Side 2
+            [2, 3, 4],     # Side 3
+            [3, 0, 4],     # Side 4
         ]
 
 

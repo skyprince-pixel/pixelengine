@@ -678,10 +678,15 @@ class Outline(PObject):
 class Grid(PObject):
     """Draw a pixel grid overlay — great for educational content.
 
+    Supports multiple grid styles for different use cases.
+
     Usage::
 
         grid = Grid(cell_size=16, color="#1D2B53", canvas_width=256, canvas_height=144)
-        scene.add(grid)
+        dot_grid = Grid(cell_size=16, style="dot", color="#29ADFF")
+        iso_grid = Grid(cell_size=16, style="isometric", color="#1D2B53")
+        axes_grid = Grid(cell_size=32, style="axes", color="#1D2B53",
+                         axis_color="#FF004D")
     """
 
     def __init__(
@@ -692,11 +697,15 @@ class Grid(PObject):
         color: str = "#1D2B53",
         x: int = 0,
         y: int = 0,
+        style: str = "rectangular",
+        axis_color: str = None,
     ):
         super().__init__(x=x, y=y, color=color)
         self.cell_size = cell_size
         self.grid_width = canvas_width
         self.grid_height = canvas_height
+        self.style = style  # "rectangular", "dot", "isometric", "hex", "axes"
+        self.axis_color = parse_color(axis_color) if axis_color else None
         self.z_index = 90
 
     def render(self, canvas):
@@ -707,15 +716,108 @@ class Grid(PObject):
         color = self.get_render_color()
         ox, oy = int(self.x), int(self.y)
 
-        # Vertical lines
+        if self.style == "dot":
+            self._render_dot(canvas, color, ox, oy)
+        elif self.style == "isometric":
+            self._render_isometric(canvas, color, ox, oy)
+        elif self.style == "hex":
+            self._render_hex(canvas, color, ox, oy)
+        elif self.style == "axes":
+            self._render_axes(canvas, color, ox, oy)
+        else:
+            self._render_rectangular(canvas, color, ox, oy)
+
+    def _render_rectangular(self, canvas, color, ox, oy):
+        """Standard rectangular grid."""
         for gx in range(0, self.grid_width + 1, self.cell_size):
             for gy in range(self.grid_height):
                 canvas.set_pixel(ox + gx, oy + gy, color)
-
-        # Horizontal lines
         for gy in range(0, self.grid_height + 1, self.cell_size):
             for gx in range(self.grid_width):
                 canvas.set_pixel(ox + gx, oy + gy, color)
+
+    def _render_dot(self, canvas, color, ox, oy):
+        """Dot grid — dots at intersections only."""
+        for gx in range(0, self.grid_width + 1, self.cell_size):
+            for gy in range(0, self.grid_height + 1, self.cell_size):
+                canvas.set_pixel(ox + gx, oy + gy, color)
+
+    def _render_isometric(self, canvas, color, ox, oy):
+        """Isometric diamond grid for 2.5D/isometric scenes."""
+        cs = self.cell_size
+        half = cs // 2
+        # Draw diagonal lines in both directions
+        for start_x in range(-self.grid_height, self.grid_width + self.grid_height, cs):
+            # Down-right diagonal
+            x, y = start_x, 0
+            while y < self.grid_height:
+                if 0 <= x < self.grid_width:
+                    canvas.set_pixel(ox + x, oy + y, color)
+                x += 1
+                y += 1
+            # Down-left diagonal
+            x, y = start_x, 0
+            while y < self.grid_height:
+                if 0 <= x < self.grid_width:
+                    canvas.set_pixel(ox + x, oy + y, color)
+                x -= 1
+                y += 1
+
+    def _render_hex(self, canvas, color, ox, oy):
+        """Hexagonal dot grid for hex-based layouts."""
+        cs = self.cell_size
+        row_height = int(cs * 0.866)  # sqrt(3)/2
+        row = 0
+        y = 0
+        while y < self.grid_height:
+            offset = cs // 2 if row % 2 else 0
+            x = offset
+            while x < self.grid_width:
+                canvas.set_pixel(ox + x, oy + y, color)
+                # Draw small hex markers (6 surrounding dots)
+                for angle_deg in range(0, 360, 60):
+                    angle = math.radians(angle_deg)
+                    dx = int(cs * 0.3 * math.cos(angle))
+                    dy = int(cs * 0.3 * math.sin(angle))
+                    px, py = x + dx, y + dy
+                    if 0 <= px < self.grid_width and 0 <= py < self.grid_height:
+                        canvas.set_pixel(ox + px, oy + py, color)
+                x += cs
+            y += row_height
+            row += 1
+
+    def _render_axes(self, canvas, color, ox, oy):
+        """Coordinate axes grid with emphasized center axes."""
+        # Draw background grid lines
+        self._render_rectangular(canvas, color, ox, oy)
+
+        # Draw emphasized axes through center
+        axis_color = self.axis_color or (
+            min(255, color[0] + 60),
+            min(255, color[1] + 60),
+            min(255, color[2] + 60),
+            color[3],
+        )
+        cx = self.grid_width // 2
+        cy = self.grid_height // 2
+
+        # Horizontal axis
+        for gx in range(self.grid_width):
+            canvas.set_pixel(ox + gx, oy + cy, axis_color)
+        # Vertical axis
+        for gy in range(self.grid_height):
+            canvas.set_pixel(ox + cx, oy + gy, axis_color)
+
+        # Tick marks on axes
+        cs = self.cell_size
+        for gx in range(0, self.grid_width + 1, cs):
+            for dy in range(-1, 2):
+                if 0 <= cy + dy < self.grid_height:
+                    canvas.set_pixel(ox + gx, oy + cy + dy, axis_color)
+        for gy in range(0, self.grid_height + 1, cs):
+            for dx in range(-1, 2):
+                if 0 <= cx + dx < self.grid_width:
+                    canvas.set_pixel(ox + cx + dx, oy + gy, axis_color)
 
 
 # ═══════════════════════════════════════════════════════════

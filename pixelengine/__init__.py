@@ -1,4 +1,4 @@
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -11,6 +11,11 @@ from pixelengine.layout import Layout, Zone
 # ── Color System ────────────────────────────────────────────
 from pixelengine.color import (
     parse_color,
+    lerp_color,
+    LinearGradient,
+    RadialGradient,
+    PaletteMap,
+    PaletteShift,
     PICO8,
     GAMEBOY,
     NES,
@@ -21,7 +26,7 @@ from pixelengine.color import (
 from pixelengine.pobject import PObject, Link, ReactTo
 
 # ── Shapes ──────────────────────────────────────────────────
-from pixelengine.shapes import Rect, Circle, Line, Triangle, Polygon
+from pixelengine.shapes import Rect, RRect, Circle, Line, Triangle, Polygon
 
 # ── Animation ───────────────────────────────────────────────
 # TIP: Prefer OrganicMoveTo/OrganicFadeIn over MoveTo/FadeIn for natural motion.
@@ -36,6 +41,7 @@ from pixelengine.animation import (
     Blink,
     ColorShift,
     AnimationGroup,
+    ChainedAnimation,
     Sequence,
     linear,
     ease_in,
@@ -94,6 +100,8 @@ from pixelengine.construction import (
     Uncreate,
     ShowPassingFlash,
     GrowArrow,
+    RevealCircular,
+    RevealRect,
 )
 
 # ── Transform Animations ───────────────────────────────────
@@ -145,10 +153,12 @@ from pixelengine.mathobjects import (
     Axes,
     Graph,
     Dot,
+    Table,
+    Matrix,
 )
 
 # ── Text ────────────────────────────────────────────────────
-from pixelengine.text import PixelText, TypeWriter
+from pixelengine.text import PixelText, TypeWriter, FONT_3X5, FONT_SPECS
 
 # ── Sprite ──────────────────────────────────────────────────
 # TIP: Use ImageSprite to import real images with palette quantization.
@@ -211,6 +221,11 @@ from pixelengine.shaders import (
 from pixelengine.background import (
     Background,
     GradientBackground,
+    MultiGradientBackground,
+    NoiseBackground,
+    WeatherBackground,
+    AnimatedGradientBackground,
+    SceneBackground,
     Starfield,
     ParallaxLayer,
 )
@@ -265,6 +280,7 @@ from pixelengine.objects3d import (
     Cylinder3D,
     Mesh3D,
     Axes3D,
+    Rotate3D,
 )
 from pixelengine.camera3d import Camera3D, IsoCamera, Orbit3D, Zoom3D
 
@@ -292,6 +308,14 @@ from pixelengine.simulations import (
 #      context-aware sounds. Use on every key visual moment!
 from pixelengine.sound import SoundFX, SoundTimeline, note_freq
 from pixelengine.voiceover import VoiceOver
+
+# ── Annotations ────────────────────────────────────────────
+# TIP: Use Callout for speech bubbles, Label for text tags, Marker for numbered points.
+from pixelengine.annotations import Callout, Label, Marker
+
+# ── Code Block ─────────────────────────────────────────────
+# TIP: Use CodeBlock for syntax-highlighted code display in education videos.
+from pixelengine.codeblock import CodeBlock
 
 # ── Pixel Art Generation ───────────────────────────────────
 # TIP: Generate characters/backgrounds procedurally — no image files needed.
@@ -344,7 +368,7 @@ __all__ = [
     # Layout
     "Layout", "Zone", "Group", "VStack", "HStack",
     # Shapes
-    "Rect", "Circle", "Line", "Triangle", "Polygon",
+    "Rect", "RRect", "Circle", "Line", "Triangle", "Polygon",
     # Organic Animation System (default)
     "MotionFeel", "organic_noise",
     "OrganicMoveTo", "OrganicScale", "OrganicFadeIn", "OrganicFadeOut", "OrganicRotate",
@@ -357,7 +381,7 @@ __all__ = [
     "Animation", "MoveTo", "MoveBy",
     "FadeIn", "FadeOut", "Scale", "Rotate",
     "Blink", "ColorShift",
-    "AnimationGroup", "Sequence",
+    "AnimationGroup", "ChainedAnimation", "Sequence",
     # v4 Animation Groups & Modifiers
     "Stagger", "Delayed", "Reversed", "Looped",
     # v4 Spring Physics
@@ -371,6 +395,7 @@ __all__ = [
     # Construction (Manim-like)
     "GrowFromPoint", "GrowFromEdge", "DrawBorderThenFill",
     "Create", "Uncreate", "ShowPassingFlash", "GrowArrow",
+    "RevealCircular", "RevealRect",
     # Transform
     "MorphTo", "ReplacementTransform", "TransformMatchingPoints", "VMorph",
     # v4 Path Animation
@@ -383,6 +408,7 @@ __all__ = [
     "DynamicCaption", "DynamicCaptionTrack",
     # Math Objects
     "ValueTracker", "NumberLine", "BarChart", "Axes", "Graph", "Dot",
+    "Table", "Matrix",
     # Vector
     "VectorObject", "SVGMobject",
     "VPath", "VLine", "VCircle", "VRect", "VPolygon", "VArrow", "Vector",
@@ -390,7 +416,7 @@ __all__ = [
     "MathTex", "Compose", "Terrain",
     "PixelShader", "CRTScanlines", "Ripple", "HeatShimmer", "Pixelate", "ColorGrade",
     # Text
-    "PixelText", "TypeWriter",
+    "PixelText", "TypeWriter", "FONT_3X5", "FONT_SPECS",
     # Sprite
     "Sprite", "ImageSprite",
     # Camera
@@ -401,7 +427,10 @@ __all__ = [
     "DepthOfField", "Vignette", "ChromaticAberration",
     "Letterbox", "FilmGrain", "CameraFXPipeline",
     # Background
-    "Background", "GradientBackground", "Starfield", "ParallaxLayer",
+    "Background", "GradientBackground", "MultiGradientBackground",
+    "NoiseBackground", "WeatherBackground",
+    "AnimatedGradientBackground", "SceneBackground",
+    "Starfield", "ParallaxLayer",
     # Effects
     "ParticleEmitter",
     "FadeTransition", "WipeTransition", "IrisTransition", "DissolveTransition",
@@ -420,7 +449,7 @@ __all__ = [
     "GradientTexture", "AnimatedTexture", "ScrollingTexture",
     # 3D
     "Vec3", "Mat4", "Object3D", "Cube3D", "Sphere3D", "Pyramid3D",
-    "Cylinder3D", "Mesh3D", "Axes3D",
+    "Cylinder3D", "Mesh3D", "Axes3D", "Rotate3D",
     "Camera3D", "IsoCamera", "Orbit3D", "Zoom3D",
     # Physics / Simulation
     "PhysicsBody", "PhysicsWorld",
@@ -431,7 +460,13 @@ __all__ = [
     # Pixel Art Generation
     "PixelArtist", "PALETTES", "SKIN_TONES",
     # Color
-    "parse_color", "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
+    "parse_color", "lerp_color",
+    "LinearGradient", "RadialGradient", "PaletteMap", "PaletteShift",
+    "PICO8", "GAMEBOY", "NES", "CHAR_COLORS",
+    # Annotations
+    "Callout", "Label", "Marker",
+    # Code Block
+    "CodeBlock",
     # v0.8.0 — Declarative Scene DSL
     "SceneBuilder", "slide",
     "equation", "text_block", "shape_item", "object_3d",

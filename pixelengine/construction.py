@@ -320,3 +320,115 @@ class GrowArrow(Animation):
     def on_complete(self):
         self.target.x2 = self.end_x2
         self.target.y2 = self.end_y2
+
+
+class RevealCircular(Animation):
+    """Reveal an object through an expanding circular mask.
+
+    Creates a spotlight/iris-in effect centered on the object.
+
+    Usage::
+
+        scene.play(RevealCircular(obj, cx=240, cy=135), duration=1.0)
+    """
+
+    def __init__(self, target: PObject, cx: int = None, cy: int = None,
+                 max_radius: int = None, easing=None):
+        from pixelengine.animation import ease_out
+        super().__init__(target, easing or ease_out)
+        self.cx = cx
+        self.cy = cy
+        self.max_radius = max_radius
+        self._orig_render = None
+
+    def on_start(self):
+        if self.cx is None:
+            self.cx = self.target.center_x
+        if self.cy is None:
+            self.cy = self.target.center_y
+        if self.max_radius is None:
+            w = getattr(self.target, 'width', 100) or 100
+            h = getattr(self.target, 'height', 100) or 100
+            import math
+            self.max_radius = int(math.sqrt(w * w + h * h))
+        self.target.opacity = 1.0
+        self._orig_render = self.target.render
+
+        cx, cy, max_radius = self.cx, self.cy, self.max_radius
+
+        def masked_render(canvas, _alpha=[0.0]):
+            r = int(max_radius * _alpha[0])
+            if r <= 0:
+                return
+            canvas.set_clip_circle(cx, cy, r)
+            self._orig_render(canvas)
+            canvas.clear_clip_mask()
+
+        self.target.render = masked_render
+        self._masked_render = masked_render
+
+    def update(self, alpha: float):
+        self._masked_render.__defaults__ = ([alpha],)
+
+    def on_complete(self):
+        self.target.render = self._orig_render
+
+
+class RevealRect(Animation):
+    """Reveal an object through an expanding rectangular mask.
+
+    Creates a wipe/reveal effect from center or edge.
+
+    Usage::
+
+        scene.play(RevealRect(obj, direction="center"), duration=1.0)
+    """
+
+    def __init__(self, target: PObject, direction: str = "center", easing=None):
+        from pixelengine.animation import ease_out
+        super().__init__(target, easing or ease_out)
+        self.direction = direction  # "center", "left", "right", "top", "bottom"
+        self._orig_render = None
+
+    def on_start(self):
+        self.target.opacity = 1.0
+        self._orig_render = self.target.render
+        self._obj_x = int(self.target.x)
+        self._obj_y = int(self.target.y)
+        self._obj_w = getattr(self.target, 'width', 50) or 50
+        self._obj_h = getattr(self.target, 'height', 50) or 50
+
+        direction = self.direction
+        ox, oy, ow, oh = self._obj_x, self._obj_y, self._obj_w, self._obj_h
+        orig_render = self._orig_render
+
+        def masked_render(canvas, _alpha=[0.0]):
+            a = _alpha[0]
+            if a <= 0:
+                return
+            if direction == "center":
+                hw = int(ow * a / 2)
+                hh = int(oh * a / 2)
+                cx, cy = ox + ow // 2, oy + oh // 2
+                canvas.set_clip_rect(cx - hw, cy - hh, hw * 2, hh * 2)
+            elif direction == "left":
+                canvas.set_clip_rect(ox, oy, int(ow * a), oh)
+            elif direction == "right":
+                w = int(ow * a)
+                canvas.set_clip_rect(ox + ow - w, oy, w, oh)
+            elif direction == "top":
+                canvas.set_clip_rect(ox, oy, ow, int(oh * a))
+            elif direction == "bottom":
+                h = int(oh * a)
+                canvas.set_clip_rect(ox, oy + oh - h, ow, h)
+            orig_render(canvas)
+            canvas.clear_clip_mask()
+
+        self.target.render = masked_render
+        self._masked_render = masked_render
+
+    def update(self, alpha: float):
+        self._masked_render.__defaults__ = ([alpha],)
+
+    def on_complete(self):
+        self.target.render = self._orig_render

@@ -5,6 +5,7 @@ ValueTracker for reactive educational animations.
 """
 from pixelengine.pobject import PObject
 from pixelengine.color import parse_color
+from pixelengine.text import PixelText
 
 
 # ═══════════════════════════════════════════════════════════
@@ -528,3 +529,195 @@ class Dot(PObject):
             for dx in range(-r, r + 1):
                 if dx * dx + dy * dy <= r_sq:
                     canvas.set_pixel(cx + dx, cy + dy, color)
+
+
+# ═══════════════════════════════════════════════════════════
+#  Table (data grid)
+# ═══════════════════════════════════════════════════════════
+
+class Table(PObject):
+    """Data table with headers, borders, and optional row highlighting.
+
+    Usage::
+
+        table = Table(
+            headers=["Name", "Score", "Grade"],
+            rows=[
+                ["Alice", "95", "A"],
+                ["Bob", "82", "B"],
+            ],
+            x=50, y=30,
+        )
+        scene.add(table)
+    """
+
+    def __init__(
+        self,
+        headers: list = None,
+        rows: list = None,
+        x: int = 0,
+        y: int = 0,
+        color: str = "#FFF1E8",
+        header_color: str = "#29ADFF",
+        bg_color: str = "#1D2B53",
+        border_color: str = "#5F574F",
+        highlight_rows: list = None,
+        highlight_color: str = "#7E2553",
+        cell_padding: int = 3,
+        scale: int = 1,
+    ):
+        super().__init__(x=x, y=y, color=color)
+        self.headers = headers or []
+        self.rows = rows or []
+        self.header_color = parse_color(header_color)
+        self.bg_color = parse_color(bg_color)
+        self.border_color = parse_color(border_color)
+        self.highlight_rows = set(highlight_rows or [])
+        self.highlight_color = parse_color(highlight_color)
+        self.cell_padding = cell_padding
+        self.scale = scale
+        self.z_index = 5
+
+        self._compute_dimensions()
+
+    def _compute_dimensions(self):
+        """Calculate column widths and total table size."""
+        char_w = 6 * self.scale
+        char_h = 8 * self.scale
+        pad = self.cell_padding
+
+        all_rows = [self.headers] + self.rows if self.headers else self.rows
+        num_cols = max((len(r) for r in all_rows), default=0)
+
+        self._col_widths = []
+        for col in range(num_cols):
+            max_len = 0
+            for row in all_rows:
+                if col < len(row):
+                    max_len = max(max_len, len(str(row[col])))
+            self._col_widths.append(max_len * char_w + pad * 2)
+
+        num_rows = len(self.rows) + (1 if self.headers else 0)
+        self._row_height = char_h + pad * 2
+        self.width = sum(self._col_widths) + num_cols + 1
+        self.height = num_rows * self._row_height + num_rows + 1
+
+    def render(self, canvas):
+        if not self.visible:
+            return
+        from PIL import Image, ImageDraw
+
+        img = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        border = (*self.border_color[:3], int(self.border_color[3] * self.opacity))
+        bg = (*self.bg_color[:3], int(self.bg_color[3] * self.opacity))
+        char_w = 6 * self.scale
+        pad = self.cell_padding
+
+        # Background
+        draw.rectangle([0, 0, self.width - 1, self.height - 1], fill=bg, outline=border)
+
+        row_y = 1
+        all_rows = []
+        if self.headers:
+            all_rows.append(("header", self.headers))
+        for i, row in enumerate(self.rows):
+            all_rows.append((i, row))
+
+        for row_idx, (row_type, row_data) in enumerate(all_rows):
+            # Row highlight
+            if isinstance(row_type, int) and row_type in self.highlight_rows:
+                hl = (*self.highlight_color[:3], int(self.highlight_color[3] * self.opacity))
+                draw.rectangle(
+                    [1, row_y, self.width - 2, row_y + self._row_height - 1],
+                    fill=hl,
+                )
+
+            # Horizontal line
+            if row_idx > 0:
+                for px in range(self.width):
+                    img.putpixel((px, row_y), border)
+
+            # Draw cells
+            col_x = 1
+            for col_idx, cell in enumerate(row_data):
+                if col_idx >= len(self._col_widths):
+                    break
+                cw = self._col_widths[col_idx]
+
+                # Vertical line
+                if col_idx > 0:
+                    for py in range(row_y, row_y + self._row_height):
+                        if py < self.height:
+                            img.putpixel((col_x, py), border)
+                    col_x += 1
+
+                col_x += cw
+            row_y += self._row_height
+
+        canvas.blit(img, int(self.x), int(self.y))
+
+        # Draw text on top
+        row_y = 1
+        for row_idx, (row_type, row_data) in enumerate(all_rows):
+            col_x = 1
+            for col_idx, cell in enumerate(row_data):
+                if col_idx >= len(self._col_widths):
+                    break
+                cw = self._col_widths[col_idx]
+                if col_idx > 0:
+                    col_x += 1
+
+                text_color = self.header_color if row_type == "header" else self.color
+                text_color = (*text_color[:3], int(text_color[3] * self.opacity))
+                label = PixelText(
+                    str(cell), x=int(self.x) + col_x + pad,
+                    y=int(self.y) + row_y + pad,
+                    color=text_color, scale=self.scale,
+                )
+                label.render(canvas)
+                col_x += cw
+            row_y += self._row_height
+
+
+class Matrix(Table):
+    """Mathematical matrix display with brackets.
+
+    Usage::
+
+        m = Matrix(
+            data=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            x=100, y=50,
+        )
+        scene.add(m)
+    """
+
+    def __init__(self, data: list, x: int = 0, y: int = 0,
+                 color: str = "#FFF1E8", scale: int = 1):
+        rows = [[str(val) for val in row] for row in data]
+        super().__init__(
+            headers=None, rows=rows, x=x, y=y, color=color,
+            bg_color="#00000000", border_color="#00000000",
+            cell_padding=2, scale=scale,
+        )
+        self._bracket_color = parse_color(color)
+
+    def render(self, canvas):
+        super().render(canvas)
+        # Draw brackets
+        bracket_color = (*self._bracket_color[:3],
+                         int(self._bracket_color[3] * self.opacity))
+        ox, oy = int(self.x), int(self.y)
+
+        # Left bracket
+        for py in range(self.height):
+            canvas.set_pixel(ox - 2, oy + py, bracket_color)
+        canvas.set_pixel(ox - 1, oy, bracket_color)
+        canvas.set_pixel(ox - 1, oy + self.height - 1, bracket_color)
+
+        # Right bracket
+        rx = ox + self.width + 1
+        for py in range(self.height):
+            canvas.set_pixel(rx, oy + py, bracket_color)
+        canvas.set_pixel(rx - 1, oy, bracket_color)
+        canvas.set_pixel(rx - 1, oy + self.height - 1, bracket_color)

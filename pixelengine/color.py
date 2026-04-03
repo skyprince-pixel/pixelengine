@@ -163,3 +163,120 @@ def parse_color(
             return (r, g, b, a)
 
     raise ValueError(f"Cannot parse color: {color!r}")
+
+
+# ── Palette Utilities ──────────────────────────────────────
+
+def lerp_color(c1: tuple, c2: tuple, t: float) -> tuple:
+    """Linear interpolation between two RGBA colors."""
+    t = max(0.0, min(1.0, t))
+    return (
+        int(c1[0] + (c2[0] - c1[0]) * t),
+        int(c1[1] + (c2[1] - c1[1]) * t),
+        int(c1[2] + (c2[2] - c1[2]) * t),
+        int(c1[3] + (c2[3] - c1[3]) * t),
+    )
+
+
+class LinearGradient:
+    """Linear gradient fill specification for shapes.
+
+    Usage::
+
+        grad = LinearGradient("#FF004D", "#29ADFF", direction="vertical")
+        rect.fill_gradient = grad
+    """
+
+    def __init__(self, start_color, end_color, direction: str = "vertical"):
+        self.start_color = parse_color(start_color)
+        self.end_color = parse_color(end_color)
+        self.direction = direction  # "vertical" or "horizontal"
+
+    def sample(self, x: int, y: int, width: int, height: int) -> tuple:
+        if self.direction == "vertical":
+            t = y / max(1, height - 1) if height > 1 else 0
+        else:
+            t = x / max(1, width - 1) if width > 1 else 0
+        return lerp_color(self.start_color, self.end_color, t)
+
+
+class RadialGradient:
+    """Radial gradient fill specification for shapes.
+
+    Usage::
+
+        grad = RadialGradient("#FFFFFF", "#000000")
+        circle.fill_gradient = grad
+    """
+
+    def __init__(self, center_color, edge_color):
+        self.center_color = parse_color(center_color)
+        self.edge_color = parse_color(edge_color)
+
+    def sample(self, x: int, y: int, width: int, height: int) -> tuple:
+        import math
+        cx, cy = width / 2, height / 2
+        max_r = math.sqrt(cx * cx + cy * cy)
+        dist = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+        t = min(1.0, dist / max_r) if max_r > 0 else 0
+        return lerp_color(self.center_color, self.edge_color, t)
+
+
+class PaletteMap:
+    """Maps colors from one palette to another with interpolation.
+
+    Usage::
+
+        mapper = PaletteMap(PICO8, GAMEBOY)
+        shifted_color = mapper.map(original_color, alpha=0.5)
+    """
+
+    def __init__(self, source_palette: dict, target_palette: dict):
+        src_colors = list(source_palette.values())
+        tgt_colors = list(target_palette.values())
+        self._mapping = {}
+        for i, sc in enumerate(src_colors):
+            tc = tgt_colors[i % len(tgt_colors)]
+            self._mapping[sc] = tc
+
+    def map(self, color: tuple, alpha: float = 1.0) -> tuple:
+        """Map a color from source to target palette, blended by alpha."""
+        key = tuple(color[:4])
+        if key in self._mapping:
+            return lerp_color(key, self._mapping[key], alpha)
+        # Find closest match in source palette
+        best_dist = float('inf')
+        best_target = color
+        for src, tgt in self._mapping.items():
+            dist = sum((a - b) ** 2 for a, b in zip(color[:3], src[:3]))
+            if dist < best_dist:
+                best_dist = dist
+                best_target = tgt
+        return lerp_color(color, best_target, alpha)
+
+
+class PaletteShift:
+    """Animation that shifts all objects in a scene from one palette to another.
+
+    Usage::
+
+        scene.play(PaletteShift(scene, PICO8, GAMEBOY), duration=2.0)
+    """
+
+    def __init__(self, scene, source_palette: dict, target_palette: dict):
+        self.scene = scene
+        self.mapper = PaletteMap(source_palette, target_palette)
+        self._original_colors = {}
+        self._started = False
+
+    def interpolate(self, alpha: float):
+        alpha = max(0.0, min(1.0, alpha))
+        if not self._started:
+            self._started = True
+            for obj in self.scene._objects:
+                self._original_colors[id(obj)] = obj.color
+
+        for obj in self.scene._objects:
+            orig = self._original_colors.get(id(obj))
+            if orig:
+                obj.color = self.mapper.map(orig, alpha)

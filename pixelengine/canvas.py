@@ -29,15 +29,42 @@ class Canvas:
         # Pillow image (lazy-created for compatibility)
         self._image = None
         self._image_dirty = True
+        # Active blend mode (set per-object during scene render)
+        self._active_blend_mode = "normal"
+        # Clip mask: numpy bool array (H, W), True = draw allowed
+        self._clip_mask = None
 
     def clear(self):
         """Clear the canvas to the background color."""
         self._pixels[:] = self._bg_array
         self._image_dirty = True
 
+    def set_clip_circle(self, cx: int, cy: int, radius: int):
+        """Set a circular clip mask. Only pixels inside are drawn."""
+        mask = np.zeros((self.height, self.width), dtype=bool)
+        ys = np.arange(self.height).reshape(-1, 1)
+        xs = np.arange(self.width).reshape(1, -1)
+        dist_sq = (xs - cx) ** 2 + (ys - cy) ** 2
+        mask[dist_sq <= radius * radius] = True
+        self._clip_mask = mask
+
+    def set_clip_rect(self, x: int, y: int, w: int, h: int):
+        """Set a rectangular clip mask."""
+        mask = np.zeros((self.height, self.width), dtype=bool)
+        x2, y2 = min(x + w, self.width), min(y + h, self.height)
+        x, y = max(0, x), max(0, y)
+        mask[y:y2, x:x2] = True
+        self._clip_mask = mask
+
+    def clear_clip_mask(self):
+        """Remove the clip mask — all pixels can be drawn."""
+        self._clip_mask = None
+
     def set_pixel(self, x: int, y: int, color: tuple):
         """Set a single pixel. Silently ignores out-of-bounds coordinates."""
         if 0 <= x < self.width and 0 <= y < self.height:
+            if self._clip_mask is not None and not self._clip_mask[y, x]:
+                return
             if len(color) >= 4 and color[3] < 255:
                 # Alpha compositing
                 fg = np.array(color[:4], dtype=np.float32)
@@ -67,10 +94,14 @@ class Canvas:
         self._sync_image()
         return self._image
 
-    def blit(self, image: Image.Image, x: int, y: int):
-        """Paste an RGBA image onto the canvas with alpha compositing.
+    def blit(self, image: Image.Image, x: int, y: int, blend_mode: str = "normal"):
+        """Paste an RGBA image onto the canvas with compositing.
 
-        Handles images that extend beyond canvas bounds by cropping.
+        Args:
+            image: Source RGBA image.
+            x, y: Destination position.
+            blend_mode: Compositing mode — "normal", "additive", "multiply",
+                        "screen", or "overlay".
         """
         x, y = int(x), int(y)
 
@@ -94,23 +125,59 @@ class Canvas:
         src_array = np.array(image)
         src_region = src_array[src_y:src_y + crop_h, src_x:src_x + crop_w]
 
-        # Vectorized alpha compositing
         fg = src_region.astype(np.float32)
         bg = self._pixels[dst_y:dst_y + crop_h, dst_x:dst_x + crop_w].astype(np.float32)
-
         fa = fg[:, :, 3:4] / 255.0
-        ba = bg[:, :, 3:4] / 255.0
-        out_a = fa + ba * (1.0 - fa)
 
-        # Avoid division by zero
-        safe_a = np.where(out_a > 0, out_a, 1.0)
-        out_rgb = (fg[:, :, :3] * fa + bg[:, :, :3] * ba * (1.0 - fa)) / safe_a
+        if blend_mode == "additive":
+            # Additive: great for glow effects
+            out_rgb = np.minimum(bg[:, :, :3] + fg[:, :, :3] * fa, 255.0)
+            out_a = np.minimum(bg[:, :, 3:4] + fg[:, :, 3:4], 255.0)
+            result = np.zeros_like(fg)
+            result[:, :, :3] = out_rgb
+            result[:, :, 3:4] = out_a
+        elif blend_mode == "multiply":
+            # Multiply: great for shadows
+            blended = fg[:, :, :3] * bg[:, :, :3] / 255.0
+            out_rgb = blended * fa + bg[:, :, :3] * (1.0 - fa)
+            ba = bg[:, :, 3:4] / 255.0
+            out_a = (fa + ba * (1.0 - fa)) * 255.0
+            result = np.zeros_like(fg)
+            result[:, :, :3] = out_rgb
+            result[:, :, 3:4] = out_a
+        elif blend_mode == "screen":
+            # Screen: lightens, great for highlights
+            blended = 255.0 - (255.0 - fg[:, :, :3]) * (255.0 - bg[:, :, :3]) / 255.0
+            out_rgb = blended * fa + bg[:, :, :3] * (1.0 - fa)
+            ba = bg[:, :, 3:4] / 255.0
+            out_a = (fa + ba * (1.0 - fa)) * 255.0
+            result = np.zeros_like(fg)
+            result[:, :, :3] = out_rgb
+            result[:, :, 3:4] = out_a
+        elif blend_mode == "overlay":
+            # Overlay: contrast enhancement
+            low = 2.0 * fg[:, :, :3] * bg[:, :, :3] / 255.0
+            high = 255.0 - 2.0 * (255.0 - fg[:, :, :3]) * (255.0 - bg[:, :, :3]) / 255.0
+            blended = np.where(bg[:, :, :3] < 128, low, high)
+            out_rgb = blended * fa + bg[:, :, :3] * (1.0 - fa)
+            ba = bg[:, :, 3:4] / 255.0
+            out_a = (fa + ba * (1.0 - fa)) * 255.0
+            result = np.zeros_like(fg)
+            result[:, :, :3] = out_rgb
+            result[:, :, 3:4] = out_a
+        else:
+            # Normal alpha compositing
+            ba = bg[:, :, 3:4] / 255.0
+            out_a = fa + ba * (1.0 - fa)
+            safe_a = np.where(out_a > 0, out_a, 1.0)
+            out_rgb = (fg[:, :, :3] * fa + bg[:, :, :3] * ba * (1.0 - fa)) / safe_a
+            result = np.zeros_like(fg)
+            result[:, :, :3] = out_rgb
+            result[:, :, 3:4] = out_a * 255.0
 
-        result = np.zeros_like(fg)
-        result[:, :, :3] = out_rgb
-        result[:, :, 3:4] = out_a * 255.0
-
-        self._pixels[dst_y:dst_y + crop_h, dst_x:dst_x + crop_w] = result.astype(np.uint8)
+        self._pixels[dst_y:dst_y + crop_h, dst_x:dst_x + crop_w] = np.clip(
+            result, 0, 255
+        ).astype(np.uint8)
         self._image_dirty = True
 
     def get_frame(self, upscale: int = 1) -> Image.Image:
