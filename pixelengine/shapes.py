@@ -287,9 +287,12 @@ class Line(PObject):
                 y += sy
 
     def get_bounds(self) -> Bounds:
-        min_x = min(self.x1, self.x2)
-        min_y = min(self.y1, self.y2)
-        return Bounds(min_x, min_y, abs(self.x2 - self.x1), abs(self.y2 - self.y1))
+        half_t = self.thickness // 2
+        min_x = min(self.x1, self.x2) - half_t
+        min_y = min(self.y1, self.y2) - half_t
+        width = abs(self.x2 - self.x1) + 2 * half_t
+        height = abs(self.y2 - self.y1) + 2 * half_t
+        return Bounds(min_x, min_y, width, height)
 
     @property
     def center_x(self) -> int:
@@ -375,11 +378,11 @@ class Triangle(PObject):
 
     @property
     def center_x(self) -> int:
-        return sum(p[0] for p in self.points) // 3
+        return sum(p[0] for p in self.points) // len(self.points)
 
     @property
     def center_y(self) -> int:
-        return sum(p[1] for p in self.points) // 3
+        return sum(p[1] for p in self.points) // len(self.points)
 
 
 class Polygon(PObject):

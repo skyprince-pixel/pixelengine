@@ -18,7 +18,18 @@ Classes:
 import os
 import math
 from PIL import Image, ImageDraw
-import svgelements as se
+try:
+    import svgelements as se
+except ImportError:
+    se = None  # Vector graphics unavailable without svgelements
+
+def _require_svgelements():
+    if se is None:
+        raise ImportError(
+            "Vector graphics require the 'svgelements' package. "
+            "Install it with:  pip install svgelements"
+        )
+
 from pixelengine.pobject import PObject
 from pixelengine.color import parse_color
 
@@ -42,6 +53,7 @@ class VectorObject(PObject):
 
     def __init__(self, x: int = 0, y: int = 0, color: str = "#FFFFFF",
                  stroke_width: float = 1.0, fill_color=None):
+        _require_svgelements()
         super().__init__(x=x, y=y, color=color)
         self.paths: list[dict] = []
         self.stroke_width = stroke_width
@@ -49,7 +61,7 @@ class VectorObject(PObject):
 
     # ── Path management ────────────────────────────────────
 
-    def add_path(self, path: se.Path, stroke=None, fill=None, stroke_width=None):
+    def add_path(self, path: "se.Path", stroke=None, fill=None, stroke_width=None):
         """Append a path with optional per-path overrides."""
         self.paths.append({
             "path": path,

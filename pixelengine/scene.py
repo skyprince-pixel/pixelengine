@@ -262,7 +262,7 @@ class Scene:
 
         num_frames = max(1, int(duration * self.config.fps))
         for frame_idx in range(num_frames):
-            alpha = frame_idx / max(1, num_frames - 1)
+            alpha = frame_idx / (num_frames - 1) if num_frames > 1 else 1.0
             for anim in animations:
                 if hasattr(anim, "interpolate"):
                     anim.interpolate(alpha)

@@ -163,7 +163,8 @@ class HStack(Group):
             
             # Y alignment (top-left semantics)
             if self.align == "center":
-                c.y = 0
+                b = c.get_bounds()
+                c.y -= b.y + b.height // 2
             elif self.align == "top":
                 c.y = 0
             elif self.align == "bottom":

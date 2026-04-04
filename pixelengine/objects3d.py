@@ -118,7 +118,10 @@ class Object3D(PObject):
                 # Simple directional light from upper-left-front
                 light_dir = (0.3, -0.5, -0.8)
                 l_len = math.sqrt(sum(d * d for d in light_dir))
-                lx, ly, lz = light_dir[0] / l_len, light_dir[1] / l_len, light_dir[2] / l_len
+                if l_len > 0:
+                    lx, ly, lz = light_dir[0] / l_len, light_dir[1] / l_len, light_dir[2] / l_len
+                else:
+                    lx, ly, lz = 0.0, 0.0, -1.0
 
                 # Lambert diffuse
                 dot = max(0.0, -(nx * lx + ny * ly + nz * lz))
