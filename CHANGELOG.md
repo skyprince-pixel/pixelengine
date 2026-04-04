@@ -2,6 +2,36 @@
 
 All notable changes to PixelEngine will be documented in this file.
 
+## [0.9.0] — 2026-04-04
+
+### Added — 25+ New Features
+- **Data Structure Visualizations**: `DSArray`, `DSStack`, `DSQueue`, `DSLinkedList`, `DSBinaryTree`, `DSHeap`, `DSHashTable`, `AlgorithmStepper`
+- **Graph Theory**: `GraphViz`, `BFSAnimation`, `DFSAnimation`, `DijkstraAnimation`
+- **Neural Network Visualization**: `NeuralNetwork`, `ForwardPassAnimation`
+- **Diagrams**: `FlowChart`, `FlowNode`, `FlowConnector`, `StateDiagram`
+- **Science Visualizations**: `Molecule`, `Circuit`, `CellDiagram`
+- **Geography**: `WorldMap`, `MapRegion` with continent highlighting
+- **Music Notation**: `MusicStaff`, `Note` with staff rendering and build animation
+- **Diff View**: `DiffView` for side-by-side code comparison
+- **Charts**: `PieChart`, `ScatterPlot`, `Histogram`, `AnimatedNumber`
+- **Logging**: Structured logging via `PIXELENGINE_LOG_LEVEL` env var
+- **Custom Exceptions**: `PixelEngineError`, `RenderError`, `ConfigurationError`, `DependencyError`, `ValidationError`, `AssetError`
+- **Preview System**: Live tkinter preview with playback controls
+- **High-res presets**: `PixelConfig.high_res_portrait()`, `PixelConfig.high_res_landscape()`
+
+### Improved
+- Enhanced 3D rendering with face filling and dithered shading
+- Expanded scene DSL with more content helpers
+- Better animation timing and easing precision
+- Improved organic animation feel presets
+
+### Fixed
+- Annotation step animation not revealing single steps (used `math.ceil` instead of `int`)
+- Division by zero in terrain noise when `octaves=0`
+- Missing `scipy`, `kokoro-onnx`, `soundfile` in voiceover optional dependencies
+- Fragile test frame path resolution in agent pipeline
+- Confusing height calculation in `MusicStaff`
+
 ## [0.8.0] — 2026-03-30
 
 ### Added — Agentic Workflow Optimization

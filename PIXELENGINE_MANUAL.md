@@ -1,4 +1,4 @@
-# PixelEngine v0.7.1
+# PixelEngine v0.9.0
 
 **PixelEngine** is a specialized, code-first Python framework for generating educational, animated pixel art videos. It renders at a configurable canvas resolution (default **480×270**) and upscales with nearest-neighbor to **1920×1080** (Full HD) for crisp pixel edges.
 
