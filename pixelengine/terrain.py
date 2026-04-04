@@ -45,7 +45,7 @@ def _value_noise_1d(width: int, octaves: int = 4, seed: int = 0) -> np.ndarray:
         amplitude *= 0.5
 
     # Normalize to [0, 1]
-    result /= total_amp
+    result /= max(total_amp, 1e-10)
     return result
 
 
@@ -65,7 +65,7 @@ def _value_noise_2d(width: int, height: int, octaves: int = 4,
 
         # Bilinear interpolation to full size
         from PIL import Image as PILImage
-        ctrl_img = PILImage.fromarray((control * 255).astype(np.uint8), mode="L")
+        ctrl_img = PILImage.fromarray((control * 255).astype(np.uint8))
         interp_img = ctrl_img.resize((width, height), PILImage.Resampling.BILINEAR)
         interp = np.array(interp_img).astype(np.float64) / 255.0
 
@@ -73,7 +73,7 @@ def _value_noise_2d(width: int, height: int, octaves: int = 4,
         total_amp += amplitude
         amplitude *= 0.5
 
-    result /= total_amp
+    result /= max(total_amp, 1e-10)
     return result
 
 
@@ -249,7 +249,7 @@ class Terrain(PObject):
         np.clip(result, 0, 255, out=result)
         pixels[:, :, :3] = result.astype(np.uint8)
 
-        self._rendered = Image.fromarray(pixels, mode="RGBA")
+        self._rendered = Image.fromarray(pixels)
         self.width = w
         self.height = h
 
@@ -267,7 +267,7 @@ class Terrain(PObject):
         if self.opacity < 1.0:
             arr = np.array(img)
             arr[:, :, 3] = (arr[:, :, 3].astype(np.float32) * self.opacity).astype(np.uint8)
-            img = Image.fromarray(arr, "RGBA")
+            img = Image.fromarray(arr)
 
         # Create progress: reveal left-to-right
         if draw_alpha < 0.99:

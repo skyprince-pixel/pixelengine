@@ -22,6 +22,8 @@ import sys
 import time
 import traceback
 
+from pixelengine.log import logger
+
 
 class PipelineResult:
     """Structured result from an AgentPipeline run."""
@@ -101,9 +103,9 @@ class AgentPipeline:
             result.error = f"Script not found: {script_path}"
             return result
 
-        print(f"\n[AgentPipeline] Starting pipeline: {os.path.basename(script_path)}")
-        print(f"  Steps: {' → '.join(steps)}")
-        print(f"  On failure: {on_failure}")
+        logger.info("Starting pipeline: %s", os.path.basename(script_path))
+        logger.info("Steps: %s", " -> ".join(steps))
+        logger.info("On failure: %s", on_failure)
 
         for step in steps:
             step_name, _, step_arg = step.partition("@")
@@ -136,7 +138,7 @@ class AgentPipeline:
                         result.status = "RENDER_FAIL"
 
                 else:
-                    print(f"  ⚠️  Unknown step: {step}")
+                    logger.warning("Unknown step: %s", step)
 
                 result.steps_completed.append(step)
 
@@ -163,13 +165,13 @@ class AgentPipeline:
                 result.status = "SUCCESS"
 
         result.duration = time.time() - start_time
-        print(f"\n[AgentPipeline] Pipeline complete: {result.status} ({result.duration:.1f}s)")
+        logger.info("Pipeline complete: %s (%.1fs)", result.status, result.duration)
         return result
 
     @classmethod
     def _step_lint(cls, script_path, result):
         """Run the linter and capture results."""
-        print(f"\n  [1/4] 🔍 Linting...")
+        logger.info("[1/4] Linting...")
         from pixelengine.cli_lint import lint_source
 
         with open(script_path, "r") as f:
@@ -192,17 +194,17 @@ class AgentPipeline:
             })
 
         passed = lint_result.get("passed", True)
-        status_icon = "✅" if passed else "❌"
         n_violations = len(lint_result.get("violations", []))
         n_suggestions = len(lint_result.get("suggestions", []))
-        print(f"       {status_icon} {n_violations} violations, {n_suggestions} suggestions")
+        logger.info("Lint %s: %d violations, %d suggestions",
+                     "passed" if passed else "failed", n_violations, n_suggestions)
         return passed
 
     @classmethod
     def _step_validate(cls, script_path, config, result,
                        scene_cls=None, scene_name=None, at=None):
         """Run structural validation."""
-        print(f"\n  [2/4] 🔬 Validating...")
+        logger.info("[2/4] Validating...")
         from pixelengine.validate import SceneValidator
 
         if scene_cls is None:
@@ -227,10 +229,9 @@ class AgentPipeline:
             result.issues.append(issue)
 
         status = report.get("status", "FAIL")
-        icon = {"PASS": "✅", "WARN": "⚠️ ", "FAIL": "❌"}.get(status, "?")
-        print(f"       {icon} Status: {status} | "
-              f"Errors: {report['issue_summary']['errors']} | "
-              f"Warnings: {report['issue_summary']['warnings']}")
+        logger.info("Validation %s: errors=%d, warnings=%d",
+                     status, report['issue_summary']['errors'],
+                     report['issue_summary']['warnings'])
 
         return status != "FAIL"
 
@@ -238,7 +239,7 @@ class AgentPipeline:
     def _step_test_frame(cls, script_path, config, result,
                          scene_cls=None, scene_name=None, at=2.0):
         """Generate a test frame."""
-        print(f"\n  [3/4] 📸 Test frame at t={at}s...")
+        logger.info("[3/4] Test frame at t=%ss...", at)
 
         if scene_cls is None:
             scene_cls = cls._load_scene(script_path, scene_name)
@@ -260,20 +261,18 @@ class AgentPipeline:
             pass  # SilentExit is expected
 
         tf_path = os.path.join(os.path.dirname(script_path) or ".", "test_frame.png")
-        if os.path.exists("test_frame.png"):
-            tf_path = os.path.abspath("test_frame.png")
 
         if os.path.exists(tf_path):
             result.test_frame_path = tf_path
-            print(f"       ✅ Saved: {tf_path}")
+            logger.debug("Test frame saved: %s", tf_path)
         else:
-            print(f"       ⚠️  Test frame not generated (scene may be shorter than {at}s)")
+            logger.warning("Test frame not generated (scene may be shorter than %ss)", at)
 
     @classmethod
     def _step_render(cls, script_path, config, result,
                      scene_cls=None, scene_name=None):
         """Full render."""
-        print(f"\n  [4/4] 🎬 Rendering...")
+        logger.info("[4/4] Rendering...")
 
         if scene_cls is None:
             scene_cls = cls._load_scene(script_path, scene_name)
@@ -305,7 +304,7 @@ class AgentPipeline:
 
             if result.output_path:
                 size = os.path.getsize(result.output_path) / 1024
-                print(f"       ✅ Output: {result.output_path} ({size:.1f} KB)")
+                logger.debug("Output: %s (%.1f KB)", result.output_path, size)
             return True
         except Exception as e:
             result.issues.append({
@@ -313,7 +312,7 @@ class AgentPipeline:
                 "severity": "error",
                 "message": str(e),
             })
-            print(f"       ❌ Render failed: {e}")
+            logger.error("Render failed: %s", e)
             return False
 
     @classmethod
@@ -343,7 +342,7 @@ class AgentPipeline:
                             return obj
 
         except Exception as e:
-            print(f"  ⚠️  Could not load scene from {script_path}: {e}")
+            logger.error("Could not load scene from %s: %s", script_path, e)
         return None
 
     @classmethod

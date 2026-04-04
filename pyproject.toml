@@ -39,6 +39,9 @@ voiceover = [
     "chatterbox-tts",
     "torch",
     "huggingface-hub",
+    "scipy",
+    "kokoro-onnx",
+    "soundfile",
 ]
 dev = [
     "pytest",
@@ -48,6 +51,9 @@ dev = [
 [project.scripts]
 pixelengine-lint = "pixelengine.cli_lint:main"
 
+[project.entry-points."pixelengine.plugins"]
+# Example: my_plugin = "my_package:register"
+
 [project.urls]
 Homepage = "https://github.com/akashkumarnayak/pixelengine"
 Repository = "https://github.com/akashkumarnayak/pixelengine"
@@ -55,6 +61,12 @@ Issues = "https://github.com/akashkumarnayak/pixelengine/issues"
 
 [tool.setuptools.packages.find]
 include = ["pixelengine*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 
 [tool.ruff]
 line-length = 100
