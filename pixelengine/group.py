@@ -4,7 +4,7 @@ This module provides structural classes that make building UIs and complex
 scenes vastly easier, especially for AI agents that struggle with math constraints.
 """
 
-from pixelengine.pobject import PObject
+from pixelengine.pobject import PObject, Bounds
 
 class Group(PObject):
     """A logical grouping of multiple PObjects.
@@ -33,11 +33,11 @@ class Group(PObject):
     def _sync_center(self):
         """Recalculate the center point based on the bounding box of children."""
         if not self._child_items: return
-        # Account for object dimensions when computing bounding box
-        min_x = min(c.x for c in self._child_items)
-        max_x = max(c.x + getattr(c, 'width', 0) for c in self._child_items)
-        min_y = min(c.y for c in self._child_items)
-        max_y = max(c.y + getattr(c, 'height', 0) for c in self._child_items)
+        all_bounds = [c.get_bounds() for c in self._child_items]
+        min_x = min(b.x for b in all_bounds)
+        max_x = max(b.x + b.width for b in all_bounds)
+        min_y = min(b.y for b in all_bounds)
+        max_y = max(b.y + b.height for b in all_bounds)
         self._x = (min_x + max_x) // 2
         self._y = (min_y + max_y) // 2
 
@@ -78,6 +78,16 @@ class Group(PObject):
             if c.visible:
                 c.render(canvas)
 
+    def get_bounds(self) -> Bounds:
+        if not self._child_items:
+            return Bounds(int(self.x), int(self.y), 0, 0)
+        all_bounds = [c.get_bounds() for c in self._child_items]
+        min_x = min(b.x for b in all_bounds)
+        min_y = min(b.y for b in all_bounds)
+        max_x = max(b.x + b.width for b in all_bounds)
+        max_y = max(b.y + b.height for b in all_bounds)
+        return Bounds(min_x, min_y, max_x - min_x, max_y - min_y)
+
     def add_child(self, child: PObject):
         self._child_items.append(child)
         self._sync_center()
@@ -116,11 +126,12 @@ class VStack(Group):
 
         # Second pass: horizontal alignment
         if self.align == "center":
-            # Center each child by offsetting based on half its width
-            # so the visual center of each child aligns on x=0
+            # Center each child by shifting so its bounding box is centered at x=0.
+            # Uses get_bounds() so objects where x is the center (e.g. PixelText
+            # align="center", MathTex) are handled correctly alongside left-edge objects.
             for c in self._child_items:
-                w = getattr(c, 'width', 0)
-                c.x = -w // 2
+                b = c.get_bounds()
+                c.x -= b.x + b.width // 2
         elif self.align == "left":
             for c in self._child_items:
                 c.x = 0

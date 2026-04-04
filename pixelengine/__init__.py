@@ -6,7 +6,8 @@ from pixelengine.config import PixelConfig
 # ── Layout Templates ───────────────────────────────────────
 # TIP: Always use Layout.portrait() or Layout.landscape() for positioning.
 #      Never hardcode coordinates. Access L.TITLE_ZONE, L.MAIN_ZONE, etc.
-from pixelengine.layout import Layout, Zone
+from pixelengine.layout import Layout, Zone, LayoutEngine, LayoutPresets
+from pixelengine.text import measure_text_width, measure_text_height
 
 # ── Color System ────────────────────────────────────────────
 from pixelengine.color import (
@@ -366,7 +367,9 @@ __all__ = [
     # Core
     "PixelConfig", "Scene", "CinematicScene", "CleanScene", "PObject",
     # Layout
-    "Layout", "Zone", "Group", "VStack", "HStack",
+    "Layout", "Zone", "LayoutEngine", "LayoutPresets",
+    "measure_text_width", "measure_text_height",
+    "Group", "VStack", "HStack",
     # Shapes
     "Rect", "RRect", "Circle", "Line", "Triangle", "Polygon",
     # Organic Animation System (default)

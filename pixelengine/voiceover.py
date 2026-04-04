@@ -97,14 +97,16 @@ def _get_kokoro():
         
     kokoro_cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "pixelengine", "kokoro")
     onnx_file = os.path.join(kokoro_cache_dir, "kokoro-v0_19.onnx")
-    voices_file = os.path.join(kokoro_cache_dir, "voices.bin")
-    
+    voices_file = os.path.join(kokoro_cache_dir, "voices.json")
+
     if not os.path.exists(onnx_file) or not os.path.exists(voices_file):
         print("[VoiceOver] Downloading Kokoro models...")
         os.makedirs(kokoro_cache_dir, exist_ok=True)
         import urllib.request
-        urllib.request.urlretrieve("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx", onnx_file)
-        urllib.request.urlretrieve("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin", voices_file)
+        if not os.path.exists(onnx_file):
+            urllib.request.urlretrieve("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx", onnx_file)
+        if not os.path.exists(voices_file):
+            urllib.request.urlretrieve("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.json", voices_file)
 
     try:
         from kokoro_onnx import Kokoro

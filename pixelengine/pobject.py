@@ -1,5 +1,8 @@
 """PixelEngine PObject — base class for all pixel objects."""
+from collections import namedtuple
 from pixelengine.color import parse_color
+
+Bounds = namedtuple("Bounds", ["x", "y", "width", "height"])
 
 
 class PObject:
@@ -84,6 +87,36 @@ class PObject:
     def center_y(self) -> int:
         """Y coordinate of center. Override for shapes with height."""
         return int(self.y)
+
+    # ── Bounds (layout engine support) ──────────────────────
+
+    def get_bounds(self) -> Bounds:
+        """Return bounding box as (x, y, width, height) where x,y is top-left.
+
+        Subclasses with non-top-left position semantics (e.g. MathTex,
+        center-aligned PixelText) MUST override this.
+        """
+        w = getattr(self, 'width', 0) or 0
+        h = getattr(self, 'height', 0) or 0
+        return Bounds(x=int(self.x), y=int(self.y), width=int(w), height=int(h))
+
+    def fits_in(self, zone) -> bool:
+        """Check if this object fits entirely within a Zone (center-based)."""
+        b = self.get_bounds()
+        zx = zone.x - zone.width // 2
+        zy = zone.y - zone.height // 2
+        return (b.x >= zx and b.y >= zy and
+                b.x + b.width <= zx + zone.width and
+                b.y + b.height <= zy + zone.height)
+
+    def overflow_ratio(self, zone) -> float:
+        """How much this object exceeds the zone. <=1.0 means it fits."""
+        b = self.get_bounds()
+        if b.width == 0 or b.height == 0:
+            return 0.0
+        w_ratio = b.width / zone.width if zone.width > 0 else float('inf')
+        h_ratio = b.height / zone.height if zone.height > 0 else float('inf')
+        return max(w_ratio, h_ratio)
 
     # ── Children (for grouped objects) ──────────────────────
 

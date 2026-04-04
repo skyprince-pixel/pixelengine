@@ -1,7 +1,7 @@
 """PixelEngine shapes — pixel-perfect geometric primitives."""
 import math
 from PIL import Image, ImageDraw
-from pixelengine.pobject import PObject
+from pixelengine.pobject import PObject, Bounds
 
 
 class Rect(PObject):
@@ -228,6 +228,10 @@ class Circle(PObject):
     def center_y(self) -> int:
         return int(self.y + self.radius)
 
+    def get_bounds(self) -> Bounds:
+        d = self.radius * 2 + 1
+        return Bounds(int(self.x), int(self.y), d, d)
+
     def __repr__(self) -> str:
         return (
             f"Circle(r={self.radius} at ({self.x},{self.y}), "
@@ -281,6 +285,11 @@ class Line(PObject):
             if e2 < dx:
                 err += dx
                 y += sy
+
+    def get_bounds(self) -> Bounds:
+        min_x = min(self.x1, self.x2)
+        min_y = min(self.y1, self.y2)
+        return Bounds(min_x, min_y, abs(self.x2 - self.x1), abs(self.y2 - self.y1))
 
     @property
     def center_x(self) -> int:
@@ -357,6 +366,13 @@ class Triangle(PObject):
         if has_texture:
             self.fill_texture.advance_frame()
 
+    def get_bounds(self) -> Bounds:
+        xs = [p[0] for p in self.points]
+        ys = [p[1] for p in self.points]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        return Bounds(min_x, min_y, max_x - min_x, max_y - min_y)
+
     @property
     def center_x(self) -> int:
         return sum(p[0] for p in self.points) // 3
@@ -413,6 +429,13 @@ class Polygon(PObject):
                 line.color = self.color
                 line.opacity = self.opacity
                 line.render(canvas)
+
+    def get_bounds(self) -> Bounds:
+        xs = [p[0] for p in self.points]
+        ys = [p[1] for p in self.points]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        return Bounds(min_x, min_y, max_x - min_x, max_y - min_y)
 
     @property
     def center_x(self) -> int:

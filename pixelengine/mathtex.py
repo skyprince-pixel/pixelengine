@@ -17,7 +17,7 @@ Usage::
 import io
 import numpy as np
 from PIL import Image
-from pixelengine.pobject import PObject
+from pixelengine.pobject import PObject, Bounds
 
 
 
@@ -47,14 +47,19 @@ class MathTex(PObject):
 
     def __init__(self, tex: str, x: int = 0, y: int = 0,
                  color: str = "#FFFFFF", scale: float = 1.0,
-                 dpi: int = 120, align: str = "center"):
+                 dpi: int = 120, align: str = "center",
+                 max_width: int = None, max_height: int = None):
         super().__init__(x=x, y=y, color=color)
         self.tex = tex
         self.scale = scale
         self.dpi = dpi
         self.align = align
+        self.max_width = max_width
+        self.max_height = max_height
         self._rendered: Image.Image | None = None
         self._render_tex()
+        if max_width is not None or max_height is not None:
+            self._auto_fit()
 
     # ── Internal rendering ──────────────────────────────────
 
@@ -161,6 +166,41 @@ class MathTex(PObject):
             blit_y = int(self.y - img.height / 2)
 
         canvas.blit(img, blit_x, blit_y)
+
+    # ── Auto-fit ────────────────────────────────────────────
+
+    def _auto_fit(self):
+        """Reduce scale until rendered image fits within max_width/max_height."""
+        for _ in range(10):
+            fits_w = self.max_width is None or self.width <= self.max_width
+            fits_h = self.max_height is None or self.height <= self.max_height
+            if fits_w and fits_h:
+                break
+            ratio_w = (self.max_width / self.width) if self.max_width and self.width > 0 else 1.0
+            ratio_h = (self.max_height / self.height) if self.max_height and self.height > 0 else 1.0
+            shrink = min(ratio_w, ratio_h) * 0.95
+            self.scale *= shrink
+            self._render_tex()
+
+    def fit_to_zone(self, zone) -> "MathTex":
+        """Re-render to fit within a Layout Zone. Positions at zone center."""
+        self.max_width = int(zone.width * 0.9)
+        self.max_height = int(zone.height * 0.9)
+        self._auto_fit()
+        self.x = zone.x
+        self.y = zone.y
+        return self
+
+    # ── Bounds ──────────────────────────────────────────────
+
+    def get_bounds(self) -> Bounds:
+        w = self.width or 0
+        h = self.height or 0
+        if self.align == "center":
+            return Bounds(int(self.x - w / 2), int(self.y - h / 2), w, h)
+        elif self.align == "right":
+            return Bounds(int(self.x - w), int(self.y - h / 2), w, h)
+        return Bounds(int(self.x), int(self.y - h / 2), w, h)
 
     # ── Utilities ───────────────────────────────────────────
 

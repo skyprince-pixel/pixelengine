@@ -1,5 +1,5 @@
 """PixelEngine text — pixel font text rendering with built-in 5×7 bitmap font."""
-from pixelengine.pobject import PObject
+from pixelengine.pobject import PObject, Bounds
 from pixelengine.color import parse_color
 
 
@@ -150,6 +150,52 @@ def _render_glyph(char: str) -> list:
 
 
 # ═══════════════════════════════════════════════════════════
+#  Text Measurement (pretext-inspired: measure without creating objects)
+# ═══════════════════════════════════════════════════════════
+
+def measure_text_width(text: str, font_size: str = "5x7", scale: int = 1) -> int:
+    """Measure the pixel width of a text string without creating a PixelText."""
+    spec = FONT_SPECS.get(font_size, FONT_SPECS["5x7"])
+    gw, gs = spec["width"], spec["spacing"]
+    lines = text.split('\n')
+    max_len = max((len(line) for line in lines), default=0)
+    return max(0, max_len * (gw + gs) - gs) * scale
+
+
+def measure_text_height(text: str, font_size: str = "5x7", scale: int = 1) -> int:
+    """Measure the pixel height of a text string without creating a PixelText."""
+    spec = FONT_SPECS.get(font_size, FONT_SPECS["5x7"])
+    gh, ls = spec["height"], spec["line_spacing"]
+    lines = text.split('\n')
+    return max(0, len(lines) * (gh + ls) - ls) * scale
+
+
+def wrap_text(text: str, max_width: int, font_size: str = "5x7", scale: int = 1) -> str:
+    """Word-wrap text to fit within max_width pixels. Returns wrapped string."""
+    spec = FONT_SPECS.get(font_size, FONT_SPECS["5x7"])
+    gw, gs = spec["width"], spec["spacing"]
+    char_w = (gw + gs) * scale
+
+    result_lines = []
+    for paragraph in text.split('\n'):
+        words = paragraph.split(' ')
+        current_line = ""
+        for word in words:
+            test_line = f"{current_line} {word}".strip() if current_line else word
+            test_width = len(test_line) * char_w - gs * scale
+            if test_width <= max_width or not current_line:
+                current_line = test_line
+            else:
+                result_lines.append(current_line)
+                current_line = word
+        if current_line:
+            result_lines.append(current_line)
+        elif not words or not paragraph:
+            result_lines.append("")
+    return '\n'.join(result_lines)
+
+
+# ═══════════════════════════════════════════════════════════
 #  PixelText PObject
 # ═══════════════════════════════════════════════════════════
 
@@ -176,9 +222,9 @@ class PixelText(PObject):
         shadow_offset: tuple = (1, 1),
         max_chars: int = None,
         font_size: str = "5x7",
+        max_width: int = None,
     ):
         super().__init__(x=x, y=y, color=color)
-        self.text = text
         self.scale = max(1, scale)
         self.align = align    # "left", "center", "right"
         self.shadow = shadow
@@ -186,6 +232,12 @@ class PixelText(PObject):
         self.shadow_offset = shadow_offset
         self.max_chars = max_chars  # For TypeWriter animation
         self.font_size = font_size  # "3x5" or "5x7"
+        self.max_width = max_width
+        # Apply word-wrap if max_width is set
+        if max_width is not None:
+            self.text = wrap_text(text, max_width, font_size, self.scale)
+        else:
+            self.text = text
 
     @property
     def display_text(self) -> str:
@@ -224,6 +276,14 @@ class PixelText(PObject):
     @property
     def height(self) -> int:
         return self.text_height * self.scale
+
+    def get_bounds(self) -> Bounds:
+        w, h = self.width, self.height
+        if self.align == "center":
+            return Bounds(int(self.x - w / 2), int(self.y), w, h)
+        elif self.align == "right":
+            return Bounds(int(self.x - w), int(self.y), w, h)
+        return Bounds(int(self.x), int(self.y), w, h)
 
     def _get_glyph(self, char: str) -> list:
         """Get glyph for a character from the active font."""

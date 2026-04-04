@@ -313,9 +313,9 @@ class SceneBuilder:
         all_visual_objects.extend(content_objects)
 
         if all_visual_objects:
-            from pixelengine.group import VStack
-            stack = VStack(all_visual_objects, spacing=15, align="center")
-            stack.move_to(L.MAIN_ZONE.x, L.MAIN_ZONE.y)
+            from pixelengine.layout import LayoutEngine
+            engine = LayoutEngine(L)
+            stack = engine.fit_content(all_visual_objects, L.MAIN_ZONE, spacing=15)
             scene.add(stack)
             self._created_objects.append(stack)
 
@@ -377,14 +377,18 @@ class SceneBuilder:
 
         if item.kind == "equation":
             from pixelengine.mathtex import MathTex
-            obj = MathTex(p["tex"], color=p.get("color", "#FFEC27"))
+            max_w = int(L.MAIN_ZONE.width * 0.85)
+            obj = MathTex(p["tex"], color=p.get("color", "#FFEC27"),
+                          max_width=max_w)
             obj.z_index = 10
             return obj
 
         elif item.kind == "text":
             from pixelengine.text import PixelText
+            max_w = int(L.MAIN_ZONE.width * 0.9)
             obj = PixelText(p["text"], scale=p.get("scale", 1),
-                            color=p.get("color", "#C2C3C7"))
+                            color=p.get("color", "#C2C3C7"),
+                            max_width=max_w)
             obj.z_index = 10
             return obj
 
