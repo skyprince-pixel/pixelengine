@@ -133,7 +133,7 @@ Run it:
 python hello.py
 ```
 
-Output is saved to `outputs/hello/`.
+Output is auto-organized into `outputs/hello/` (video, audio, and script backup in one flat directory).
 
 ---
 

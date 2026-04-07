@@ -448,8 +448,10 @@ scene.add(graph)
 ---
 
 ## 18. Outputs & File Organization
- 
- `scene.render()` auto-organizes to `outputs/<script>/`.
+
+All output files are auto-organized into a flat `outputs/<script>/` directory.
+Bare filenames (e.g. `render("demo.mp4")`) are redirected there too.
+Only paths with explicit directories (e.g. `render("path/to/file.mp4")`) bypass this.
  
  ---
  

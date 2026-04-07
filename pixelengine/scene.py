@@ -17,6 +17,34 @@ class SilentExit(Exception):
     pass
 
 
+def _get_script_name(cls=None):
+    """Derive the script name from the calling module or sys.argv.
+
+    Returns a sanitised basename (no extension) suitable for use as a
+    directory name inside ``outputs/``.
+    """
+    if cls is not None:
+        module = sys.modules.get(cls.__module__)
+        script_path = getattr(module, '__file__', None)
+    else:
+        script_path = None
+
+    if not script_path:
+        script_path = sys.argv[0] if sys.argv else None
+
+    if script_path:
+        name = os.path.splitext(os.path.basename(script_path))[0]
+        if name and name != "__main__":
+            return name
+
+    return "project"
+
+
+def _is_bare_filename(path: str) -> bool:
+    """Return True if *path* is a plain filename with no directory component."""
+    return os.sep not in path and '/' not in path
+
+
 class Scene:
     """Base scene class. Subclass and override ``construct()`` to build animations.
 
@@ -29,7 +57,7 @@ class Scene:
                 self.play_sound(SoundFX.coin())
                 self.wait(2.0)
 
-        MyScene().render("output.mp4")
+        MyScene().render()  # → outputs/<script>/MyScene.mp4
 
     Auto-sound (enabled by default)::
 
@@ -244,6 +272,25 @@ class Scene:
         for _ in range(num_frames):
             self._capture_frame()
 
+    def _ensure_targets_added(self, animations):
+        """Auto-add animation targets to the scene if not already present.
+
+        Walks simple and composite animations (AnimationGroup, Stagger,
+        Sequence, ChainedAnimation) so that self.play(FadeIn(obj)) works
+        without a prior self.add(obj).
+        """
+        for anim in animations:
+            # Simple animation with a .target
+            if hasattr(anim, 'target') and anim.target is not None:
+                if anim.target not in self._objects:
+                    self._objects.append(anim.target)
+            # Composite wrappers that hold sub-animations
+            if hasattr(anim, 'animations'):
+                self._ensure_targets_added(anim.animations)
+            # ChainedAnimation stores (anim, weight) tuples
+            if hasattr(anim, '_segments'):
+                self._ensure_targets_added([a for a, _ in anim._segments])
+
     def play(self, *animations, duration: float = 1.0, sound: SoundFX = None):
         """Play one or more animations over the given duration.
 
@@ -252,6 +299,9 @@ class Scene:
             duration: How long the animation runs (seconds).
             sound: Optional SoundFX to play at the start of this animation.
         """
+        # Auto-add animation targets to scene so they get rendered
+        self._ensure_targets_added(animations)
+
         # Place explicit sound
         if sound is not None:
             self.play_sound(sound)
@@ -436,8 +486,11 @@ class Scene:
         # AI Debugging: Test Frame Extraction
         if getattr(self, 'test_frame_target', None) is not None:
             if self._current_time >= self.test_frame_target:
-                frame.save("test_frame.png")
-                print(f"\n[PixelEngine] Test frame saved to root: test_frame.png (t={self._current_time:.2f}s)")
+                tf_dir = os.path.join("outputs", _get_script_name(self.__class__))
+                os.makedirs(tf_dir, exist_ok=True)
+                tf_path = os.path.join(tf_dir, "test_frame.png")
+                frame.save(tf_path)
+                print(f"\n[PixelEngine] Test frame saved: {tf_path} (t={self._current_time:.2f}s)")
                 raise SilentExit()
 
     def _render_object(self, obj):
@@ -497,14 +550,16 @@ class Scene:
     def render(self, output_path: str = None, lint: bool = False):
         """Build the scene and encode to video with audio.
 
-        If `output_path` is None, automatically organizes generated files into:
-          outputs/<script_name>/<resolution_fps>/<SceneName>.mp4
-          outputs/<script_name>/audio/<SceneName>.wav
-          outputs/<script_name>/scripts/<script_name>.py (backup of the source)
+        Output path resolution:
+          - ``None``  → ``outputs/<script_name>/<SceneName>.mp4``
+          - bare filename (e.g. ``"demo.mp4"``) → ``outputs/<script_name>/demo.mp4``
+          - path with directories (e.g. ``"vids/demo.mp4"``) → used as-is
+
+        Audio and a source-script backup are saved alongside the video when
+        auto-organization is active.
 
         Args:
-            output_path: Optional exact path for the output video file. If provided,
-                         bypasses the auto-organization system.
+            output_path: Optional path for the output video file.
             lint: If True, run the linter on the source file before rendering.
                   Halts on violations.
         """
@@ -556,31 +611,26 @@ class Scene:
         self._last_tw_char_count = {}
         self._render_start_time = time.time()
 
-        # Determine paths
-        if output_path is None:
-            module = sys.modules.get(self.__class__.__module__)
-            script_path = getattr(module, '__file__', sys.argv[0])
-            script_name = os.path.splitext(os.path.basename(script_path))[0]
-            if not script_name or script_name == "__main__":
-                script_name = "project"
+        # Determine paths — auto-organize into outputs/<script>/
+        script_name = _get_script_name(self.__class__)
+        scene_name = self.__class__.__name__
 
-            scene_name = self.__class__.__name__
-            res_fps = f"{self.config.output_width}x{self.config.output_height}_{self.config.fps}fps"
-
+        if output_path is None or _is_bare_filename(output_path):
             base_dir = os.path.join("outputs", script_name)
-            video_dir = os.path.join(base_dir, res_fps)
-            audio_dir = os.path.join(base_dir, "audio")
-            script_dir = os.path.join(base_dir, "scripts")
+            os.makedirs(base_dir, exist_ok=True)
 
-            os.makedirs(video_dir, exist_ok=True)
-            os.makedirs(audio_dir, exist_ok=True)
-            os.makedirs(script_dir, exist_ok=True)
+            if output_path is None:
+                output_path = os.path.join(base_dir, f"{scene_name}.mp4")
+            else:
+                output_path = os.path.join(base_dir, output_path)
 
-            output_path = os.path.join(video_dir, f"{scene_name}.mp4")
-            audio_path = os.path.join(audio_dir, f"{scene_name}.wav")
+            audio_path = os.path.join(base_dir, f"{scene_name}.wav")
 
-            if os.path.exists(script_path):
-                shutil.copy2(script_path, os.path.join(script_dir, os.path.basename(script_path)))
+            # Back up source script
+            module = sys.modules.get(self.__class__.__module__)
+            src = getattr(module, '__file__', None)
+            if src and os.path.exists(src):
+                shutil.copy2(src, os.path.join(base_dir, os.path.basename(src)))
         else:
             audio_path = None
 

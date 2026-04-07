@@ -11,11 +11,12 @@ Usage::
 
     from pixelengine import Compose
 
+    # Auto-organized → outputs/<script>/<FirstScene>_composed.mp4
     Compose(IntroScene, MainScene, OutroScene,
-            transition_duration=0.5).render("full_video.mp4")
+            transition_duration=0.5).render()
 
     # Resume from checkpoint after crash
-    Compose(IntroScene, MainScene, OutroScene).render("out.mp4", resume=True)
+    Compose(IntroScene, MainScene, OutroScene).render(resume=True)
 """
 import json
 import os
@@ -53,7 +54,7 @@ class Compose:
             def construct(self): ...
 
         Compose(Intro, Main, config=PixelConfig.portrait(),
-                transition_duration=0.5).render("output.mp4")
+                transition_duration=0.5).render()  # → outputs/<script>/Intro_composed.mp4
     """
 
     def __init__(self, *scene_classes, config: PixelConfig = None,
@@ -87,13 +88,30 @@ class Compose:
         except (json.JSONDecodeError, IOError):
             return None
 
-    def render(self, output_path: str = "composed_output.mp4", resume: bool = False):
+    def render(self, output_path: str = None, resume: bool = False):
         """Build all scenes, crossfade between them, and encode to video.
 
+        Output path resolution (same rules as ``Scene.render``):
+          - ``None``  → ``outputs/<script>/<FirstScene>_composed.mp4``
+          - bare filename → ``outputs/<script>/<filename>``
+          - path with directories → used as-is
+
         Args:
-            output_path: Path for the output video file.
+            output_path: Optional path for the output video file.
             resume: If True, resume from the last checkpoint (skip completed scenes).
         """
+        from pixelengine.scene import _get_script_name, _is_bare_filename
+
+        script_name = _get_script_name()
+        if output_path is None or _is_bare_filename(output_path):
+            base_dir = os.path.join("outputs", script_name)
+            os.makedirs(base_dir, exist_ok=True)
+            if output_path is None:
+                first = self.scene_classes[0].__name__ if self.scene_classes else "composed"
+                output_path = os.path.join(base_dir, f"{first}_composed.mp4")
+            else:
+                output_path = os.path.join(base_dir, output_path)
+
         print(f"[PixelEngine Compose] Rendering {len(self.scene_classes)} scenes")
         print(f"  Config: {self.config.canvas_width}×{self.config.canvas_height} "
               f"→ {self.config.output_width}×{self.config.output_height}")

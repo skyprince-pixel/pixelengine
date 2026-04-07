@@ -128,7 +128,7 @@ class Object3D(PObject):
                 shade = 0.3 + 0.7 * dot  # ambient + diffuse
 
                 # Back-face culling
-                if nz > 0:
+                if nz < 0:
                     continue
             else:
                 shade = 0.5

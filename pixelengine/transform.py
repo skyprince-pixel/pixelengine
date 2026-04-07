@@ -191,10 +191,11 @@ class TransformMatchingPoints(Animation):
         self.src_color = self.target.color
         self.dst_color = self.target_shape.color
         # Match counts
-        while len(self.src_points) < len(self.dst_points):
-            self.src_points.append(self.src_points[-1])
-        while len(self.dst_points) < len(self.src_points):
-            self.dst_points.append(self.dst_points[-1])
+        if self.src_points and self.dst_points:
+            while len(self.src_points) < len(self.dst_points):
+                self.src_points.append(self.src_points[-1])
+            while len(self.dst_points) < len(self.src_points):
+                self.dst_points.append(self.dst_points[-1])
 
     def update(self, alpha: float):
         new_points = []

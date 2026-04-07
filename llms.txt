@@ -433,7 +433,7 @@ self.play(TypeWriterPro(text, cursor=True, cursor_blink_rate=2), duration=2.0)
 
 ## How to Debug
 
-1. **Visual check**: `python script.py --test-frame=2.0` → saves `test_frame.png`
+1. **Visual check**: `python script.py --test-frame=2.0` → saves `outputs/<script>/test_frame.png`
 2. **Layout check**: `python script.py --dry-run` → prints object positions at each second
 3. **Lint check**: `pixelengine-lint script.py` → catches bad patterns and suggests improvements
 4. **Structured validation**: `python script.py --validate` → JSON report of bounds/overlap/dead air issues

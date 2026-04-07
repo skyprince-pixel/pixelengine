@@ -260,7 +260,8 @@ class AgentPipeline:
         except Exception:
             pass  # SilentExit is expected
 
-        tf_path = os.path.join(os.path.dirname(script_path) or ".", "test_frame.png")
+        module_name = os.path.splitext(os.path.basename(script_path))[0]
+        tf_path = os.path.join("outputs", module_name, "test_frame.png")
 
         if os.path.exists(tf_path):
             result.test_frame_path = tf_path
@@ -296,11 +297,10 @@ class AgentPipeline:
             module_name = os.path.splitext(os.path.basename(script_path))[0]
             outputs_dir = os.path.join("outputs", module_name)
             if os.path.exists(outputs_dir):
-                for root, dirs, files in os.walk(outputs_dir):
-                    for f in files:
-                        if f.endswith(".mp4"):
-                            result.output_path = os.path.join(root, f)
-                            break
+                for f in os.listdir(outputs_dir):
+                    if f.endswith(".mp4"):
+                        result.output_path = os.path.join(outputs_dir, f)
+                        break
 
             if result.output_path:
                 size = os.path.getsize(result.output_path) / 1024

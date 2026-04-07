@@ -135,7 +135,7 @@ class MyScene(Scene):
 MyScene(PixelConfig.portrait()).render("output.mp4")
 ```
 
-Output is saved to `outputs/<script_name>/` with organized video, audio, and script backup.
+Output is auto-organized into `outputs/<script_name>/` — video, audio, test frames, and a script backup all go in one flat directory.
 
 ---
 
