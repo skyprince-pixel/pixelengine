@@ -1,4 +1,4 @@
-# PixelEngine v0.7.1 — AI Agent Cookbook
+# PixelEngine v0.10.0 — AI Agent Cookbook
 
 > This file is the primary reference for AI agents generating videos with PixelEngine.
 > For the complete API documentation, see `llms-full.txt`.
@@ -593,4 +593,99 @@ report = SceneValidator.validate(MyScene, config=PixelConfig.portrait(), at=[1.0
 # python script.py --validate          # Full report
 # python script.py --validate=3.0      # At specific timestamp
 ```
+
+---
+
+## Pattern: Interpolation & Spring (v0.10.0)
+
+```python
+from pixelengine import interpolate, interpolate_color, spring
+
+# Map a value from one range to another (Remotion-inspired)
+size = interpolate(frame, [0, 30], [0, 100], easing=ease_out)
+
+# Multi-stop color interpolation
+color = interpolate_color(progress, [0, 0.5, 1.0],
+                          ["#FF004D", "#FFEC27", "#00E436"])
+
+# Spring physics function (standalone, not tied to an animation)
+value = spring(frame, fps=24, stiffness=100, damping=10, mass=1)
+```
+
+---
+
+## Pattern: Caption Track / Subtitles (v0.10.0)
+
+```python
+from pixelengine import CaptionTrack, CaptionStyle
+
+# Auto-generate .srt/.vtt subtitle sidecars
+track = CaptionTrack()
+track.add(start=0.0, end=2.5, text="Welcome to binary search!")
+track.add(start=3.0, end=6.0, text="It finds items in O(log n) time.")
+track.export_srt("output/captions.srt")
+track.export_vtt("output/captions.vtt")
+```
+
+---
+
+## Pattern: Data-Driven Templates (v0.10.0)
+
+```python
+from pixelengine import VideoTemplate, TemplateRunner, TitleCard, ListReveal, ChartAnimation
+
+# Built-in templates: TitleCard, ListReveal, ChartAnimation
+# Generate videos from structured data — no Scene subclass needed
+
+runner = TemplateRunner(TitleCard, config=PixelConfig.portrait())
+runner.render(data={"title": "HELLO WORLD", "subtitle": "A DEMO"})
+```
+
+---
+
+## Pattern: Multi-Codec & Parallel Rendering (v0.10.0)
+
+```python
+# Render in different codecs
+config = PixelConfig.portrait()  # default: h264/mp4
+config.codec = "h265"     # h265, vp9, av1, prores, gif
+
+# Multi-core parallel rendering (faster on multi-core machines)
+scene.render(parallel=True)
+
+# Render progress callback
+scene.render(on_progress=lambda pct: print(f"{pct:.0%} done"))
+```
+
+---
+
+## Config Presets Quick Reference
+
+| Preset | Canvas | Output | Use Case |
+|--------|--------|--------|----------|
+| `PixelConfig.portrait()` | 270x480 | 1080x1920 | YouTube Shorts, TikTok |
+| `PixelConfig.landscape()` | 480x270 | 1920x1080 | YouTube, lectures |
+| `PixelConfig.full_hd()` | 480x270 | 1920x1080 | Default HD |
+| `PixelConfig.qhd()` | 640x360 | 2560x1440 | 2K quality |
+| `PixelConfig.square()` | 384x384 | 1536x1536 | Instagram |
+| `PixelConfig.hd()` | 320x180 | 1280x720 | 720p |
+
+---
+
+## Educational Objects Quick Reference
+
+**Math & Charts:** `NumberLine`, `BarChart`, `Axes`, `Graph`, `ValueTracker`, `Dot`, `Table`, `Matrix`, `MathTex`
+
+**Data Structures** (import from `pixelengine.datastructures`):
+`DSArray`, `DSStack`, `DSQueue`, `DSLinkedList`, `DSBinaryTree`, `DSHeap`, `DSHashTable`, `AlgorithmStepper`
+
+**Graph Theory** (import from `pixelengine.graphtheory`):
+`GraphViz`, `BFSAnimation`, `DFSAnimation`, `DijkstraAnimation`
+
+**Neural Networks** (import from `pixelengine.neuralnet`):
+`NeuralNetwork`, `ForwardPassAnimation`
+
+**Annotations:** `Callout`, `Label`, `Marker`
+
+**Code Visualization:** `CodeBlock`
 
