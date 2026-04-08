@@ -1,7 +1,7 @@
 """PixelEngine animation system — easing functions and built-in animations."""
 import math
 from pixelengine.pobject import PObject
-from pixelengine.color import parse_color
+from pixelengine.color import parse_color, lerp_color
 
 
 # ═══════════════════════════════════════════════════════════
@@ -202,6 +202,147 @@ def get_easing(name_or_func):
     if isinstance(name_or_func, str) and name_or_func in EASINGS:
         return EASINGS[name_or_func]
     raise ValueError(f"Unknown easing: {name_or_func!r}. Available: {list(EASINGS.keys())}")
+
+
+# ═══════════════════════════════════════════════════════════
+#  Interpolation Utilities (Remotion-inspired)
+# ═══════════════════════════════════════════════════════════
+
+def interpolate(value: float, input_range: tuple, output_range: tuple,
+                easing=linear, clamp: bool = True) -> float:
+    """Map a value from one range to another with optional easing.
+
+    Inspired by Remotion's ``interpolate()`` — a lightweight way to derive
+    animated values without creating Animation objects.
+
+    Args:
+        value: The input value (e.g. current time, frame index, alpha).
+        input_range: (min, max) of the input domain.
+        output_range: (min, max) of the output domain.
+        easing: Easing function applied to the normalized position.
+        clamp: If True, clamp output to output_range bounds.
+
+    Usage::
+
+        # In an updater or on_frame callback
+        opacity = interpolate(scene_time, (0, 2.0), (0.0, 1.0), easing=ease_out)
+        x_pos = interpolate(alpha, (0, 1), (50, 400), easing=bounce)
+    """
+    in_min, in_max = input_range
+    out_min, out_max = output_range
+
+    if in_max == in_min:
+        return out_max
+
+    t = (value - in_min) / (in_max - in_min)
+    if clamp:
+        t = max(0.0, min(1.0, t))
+
+    easing_fn = get_easing(easing)
+    t = easing_fn(t)
+
+    return out_min + (out_max - out_min) * t
+
+
+def interpolate_color(value: float, input_range: tuple, colors: list,
+                      easing=linear) -> tuple:
+    """Map a numeric value to a color along a gradient with multiple stops.
+
+    Args:
+        value: The input value.
+        input_range: (min, max) of the input domain.
+        colors: List of color values (hex strings or RGBA tuples).
+                At least 2 colors required.
+        easing: Easing function applied to the normalized position.
+
+    Returns:
+        RGBA tuple.
+
+    Usage::
+
+        # Gradient from red → yellow → green based on progress
+        color = interpolate_color(hp, (0, 100), ["#FF004D", "#FFEC27", "#00E436"])
+    """
+    if len(colors) < 2:
+        return parse_color(colors[0]) if colors else (255, 255, 255, 255)
+
+    parsed = [parse_color(c) for c in colors]
+    in_min, in_max = input_range
+
+    if in_max == in_min:
+        return parsed[-1]
+
+    t = (value - in_min) / (in_max - in_min)
+    t = max(0.0, min(1.0, t))
+
+    easing_fn = get_easing(easing)
+    t = easing_fn(t)
+
+    # Map t to a segment between color stops
+    n_segments = len(parsed) - 1
+    segment_t = t * n_segments
+    idx = min(int(segment_t), n_segments - 1)
+    local_t = segment_t - idx
+
+    return lerp_color(parsed[idx], parsed[idx + 1], local_t)
+
+
+def spring(frame: int, fps: int, stiffness: float = 100.0,
+           damping: float = 10.0, mass: float = 1.0,
+           from_val: float = 0.0, to_val: float = 1.0) -> float:
+    """Compute a spring animation value at a given frame.
+
+    A standalone physics spring function (Remotion-inspired) that returns
+    a float with natural overshoot and settle behavior. Composable with
+    ``interpolate()`` and usable in updaters.
+
+    Args:
+        frame: Current frame index.
+        fps: Frames per second.
+        stiffness: Spring constant (higher = snappier).
+        damping: Damping coefficient (higher = less bounce).
+        mass: Mass of the object on the spring.
+        from_val: Starting value.
+        to_val: Target value.
+
+    Returns:
+        The spring value at the given frame (may overshoot to_val).
+
+    Usage::
+
+        def on_frame(self, t, dt):
+            frame = int(t * self.config.fps)
+            s = spring(frame, self.config.fps, stiffness=120, damping=10)
+            obj.x = 50 + s * 200  # Moves from 50 to 250 with bounce
+    """
+    t = frame / fps if fps > 0 else 0.0
+    omega = math.sqrt(stiffness / mass)
+    zeta = damping / (2.0 * math.sqrt(stiffness * mass))
+
+    if t <= 0.0:
+        return from_val
+
+    if zeta < 1.0:
+        # Underdamped — oscillates
+        omega_d = omega * math.sqrt(1.0 - zeta * zeta)
+        decay = math.exp(-zeta * omega * t)
+        progress = 1.0 - decay * (
+            math.cos(omega_d * t) +
+            (zeta * omega / omega_d) * math.sin(omega_d * t)
+        )
+    elif zeta == 1.0:
+        # Critically damped
+        decay = math.exp(-omega * t)
+        progress = 1.0 - decay * (1.0 + omega * t)
+    else:
+        # Overdamped
+        s1 = -omega * (zeta + math.sqrt(zeta * zeta - 1.0))
+        s2 = -omega * (zeta - math.sqrt(zeta * zeta - 1.0))
+        c2 = (s1) / (s1 - s2)
+        c1 = 1.0 - c2
+        progress = 1.0 - (c1 * math.exp(s1 * t) + c2 * math.exp(s2 * t))
+
+    return from_val + (to_val - from_val) * progress
 
 
 # ═══════════════════════════════════════════════════════════

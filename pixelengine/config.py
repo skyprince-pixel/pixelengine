@@ -24,6 +24,10 @@ class PixelConfig:
     # Output format
     output_format: str = "mp4"
 
+    # Video codec — determines encoder and container format.
+    # Supported: "h264" (default), "h265", "vp9", "av1", "prores", "gif"
+    codec: str = "h264"
+
     # Background color (hex string)
     background_color: str = "#000000"
 

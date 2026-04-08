@@ -3,6 +3,8 @@
 Uses PyAV (Python bindings for FFmpeg's C libraries) when available for
 fast in-memory encoding. Falls back to ffmpeg subprocess if PyAV is not
 installed.
+
+Supports multiple codecs: h264, h265, vp9, av1, prores, gif.
 """
 import subprocess
 import shutil
@@ -18,12 +20,46 @@ except ImportError:
     HAS_PYAV = False
 
 
+# ── Codec Configuration ────────────────────────────────────────
+# Maps codec name → (ffmpeg_encoder, pixel_format, container_ext)
+
+CODEC_MAP = {
+    "h264":   ("libx264",     "yuv420p",    ".mp4"),
+    "h265":   ("libx265",     "yuv420p",    ".mp4"),
+    "vp9":    ("libvpx-vp9",  "yuv420p",    ".webm"),
+    "av1":    ("libsvtav1",   "yuv420p",    ".mp4"),
+    "prores": ("prores_ks",   "yuva444p10le", ".mov"),
+    "gif":    ("gif",         "rgb8",       ".gif"),
+}
+
+# PyAV encoder names (some differ from ffmpeg CLI names)
+PYAV_CODEC_MAP = {
+    "h264":   "libx264",
+    "h265":   "libx265",
+    "vp9":    "libvpx-vp9",
+    "av1":    "libsvtav1",
+    "prores": "prores_ks",
+    "gif":    "gif",
+}
+
+
+def get_codec_info(codec: str) -> tuple:
+    """Return (encoder, pix_fmt, extension) for a codec name."""
+    codec = codec.lower().strip()
+    if codec in CODEC_MAP:
+        return CODEC_MAP[codec]
+    raise ValueError(
+        f"Unknown codec: {codec!r}. Supported: {list(CODEC_MAP.keys())}"
+    )
+
 
 class Renderer:
-    """Streams PIL Image frames into an MP4 video.
+    """Streams PIL Image frames into a video file.
 
     Uses PyAV when available for 2-3x faster encoding.
     Falls back to ffmpeg subprocess pipe otherwise.
+
+    Supports codecs: h264, h265, vp9, av1, prores, gif.
     """
 
     def __init__(self, config: PixelConfig):
@@ -35,7 +71,8 @@ class Renderer:
         self._height = 0
         self._output_path = None
         self._frame_count = 0
-        
+        self._on_progress = None
+
         if not HAS_PYAV:
             self._check_ffmpeg()
 
@@ -49,13 +86,22 @@ class Renderer:
                 "  Windows: https://ffmpeg.org/download.html"
             )
 
-    def open(self, output_path: str, width: int, height: int):
-        """Open the video encoder stream."""
+    def open(self, output_path: str, width: int, height: int,
+             on_progress=None):
+        """Open the video encoder stream.
+
+        Args:
+            output_path: Path for the output video file.
+            width: Frame width in pixels.
+            height: Frame height in pixels.
+            on_progress: Optional callback(frame_index, encoding_fps).
+        """
         self._output_path = output_path
         self._width = width
         self._height = height
         self._frame_count = 0
-        
+        self._on_progress = on_progress
+
         if HAS_PYAV:
             self._open_pyav()
         else:
@@ -76,14 +122,31 @@ class Renderer:
         else:
             self._close_ffmpeg()
 
+    def _get_codec_settings(self):
+        """Get encoder settings for the configured codec."""
+        codec = self.config.codec
+        encoder, pix_fmt, _ = get_codec_info(codec)
+        return encoder, pix_fmt
+
     def _open_pyav(self):
         """Initialize PyAV (in-memory FFmpeg bindings)."""
+        encoder, pix_fmt = self._get_codec_settings()
         self._container = av.open(str(self._output_path), mode='w')
-        self._stream = self._container.add_stream('libx264', rate=self.config.fps)
+        self._stream = self._container.add_stream(encoder, rate=self.config.fps)
         self._stream.width = self._width
         self._stream.height = self._height
-        self._stream.pix_fmt = 'yuv420p'
-        self._stream.options = {'crf': '15', 'preset': 'fast'}
+        self._stream.pix_fmt = pix_fmt
+
+        # Codec-specific options
+        codec = self.config.codec.lower()
+        if codec in ("h264", "h265"):
+            self._stream.options = {'crf': '15', 'preset': 'fast'}
+        elif codec == "vp9":
+            self._stream.options = {'crf': '20', 'b': '0'}
+        elif codec == "av1":
+            self._stream.options = {'crf': '20', 'preset': '6'}
+        elif codec == "prores":
+            self._stream.options = {'profile': '3'}  # HQ profile
 
     def _add_frame_pyav(self, frame: Image.Image):
         # Convert RGBA → RGB
@@ -110,6 +173,9 @@ class Renderer:
 
     def _open_ffmpeg(self):
         """Initialize ffmpeg subprocess (fallback)."""
+        encoder, pix_fmt = self._get_codec_settings()
+        codec = self.config.codec.lower()
+
         cmd = [
             "ffmpeg", "-y",                        # overwrite output
             "-f", "rawvideo",                       # raw input format
@@ -118,12 +184,40 @@ class Renderer:
             "-pix_fmt", "rgb24",                    # input pixel format
             "-r", str(self.config.fps),             # frame rate
             "-i", "-",                              # read from stdin
-            "-c:v", "libx264",                      # H.264 codec
-            "-pix_fmt", "yuv420p",                  # output pixel format
-            "-preset", "fast",                      # encoding speed
-            "-crf", "15",                           # quality
-            str(self._output_path),
+            "-c:v", encoder,                        # video codec
+            "-pix_fmt", pix_fmt,                    # output pixel format
         ]
+
+        # Codec-specific flags
+        if codec in ("h264", "h265"):
+            cmd += ["-preset", "fast", "-crf", "15"]
+        elif codec == "vp9":
+            cmd += ["-crf", "20", "-b:v", "0"]
+        elif codec == "av1":
+            cmd += ["-crf", "20", "-preset", "6"]
+        elif codec == "prores":
+            cmd += ["-profile:v", "3"]
+        elif codec == "gif":
+            # GIF needs palette generation for quality
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "rawvideo", "-vcodec", "rawvideo",
+                "-s", f"{self._width}x{self._height}",
+                "-pix_fmt", "rgb24",
+                "-r", str(self.config.fps),
+                "-i", "-",
+                "-vf", "split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                str(self._output_path),
+            ]
+            self._process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+            return
+
+        cmd.append(str(self._output_path))
 
         self._process = subprocess.Popen(
             cmd,

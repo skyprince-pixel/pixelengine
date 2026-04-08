@@ -1,4 +1,4 @@
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 # ── Configuration ───────────────────────────────────────────
 from pixelengine.config import PixelConfig
@@ -71,6 +71,10 @@ from pixelengine.animation import (
     # v4 Spring Physics
     SpringTo,
     SpringScale,
+    # v5 Interpolation Utilities (Remotion-inspired)
+    interpolate,
+    interpolate_color,
+    spring,
 )
 
 # ── Organic Animation System (PREFER THESE over classic) ───
@@ -143,6 +147,11 @@ from pixelengine.textanim import (
     DynamicCaption,
     DynamicCaptionTrack,
 )
+
+# ── Caption / Subtitle System ──────────────────────────────
+# TIP: Use CaptionTrack to auto-generate .srt/.vtt sidecar files.
+#      Use add_voiceover() to combine TTS + captioning in one call.
+from pixelengine.captions import CaptionTrack, CaptionStyle, Caption
 
 # ── Math Objects ────────────────────────────────────────────
 # TIP: Use BarChart + GrowFromEdge for animated chart reveals.
@@ -322,6 +331,21 @@ from pixelengine.codeblock import CodeBlock
 # TIP: Generate characters/backgrounds procedurally — no image files needed.
 #      PixelArtist.character(style="knight", palette="pico8")
 from pixelengine.pixelart import PixelArtist, PALETTES, SKIN_TONES
+
+# ── Data-Driven Templates ──────────────────────────────────
+# TIP: Use VideoTemplate for batch video generation from JSON data.
+#      Built-in templates: TitleCard, ListReveal, ChartAnimation.
+from pixelengine.templates import (
+    VideoTemplate,
+    TemplateRunner,
+    TitleCard,
+    ListReveal,
+    ChartAnimation,
+)
+
+# ── Parallel Rendering ─────────────────────────────────────
+# TIP: Use scene.render(parallel=True) for multi-core rendering speedup.
+from pixelengine.parallel import ParallelRenderer
 
 # ── Scene ───────────────────────────────────────────────────
 # TIP: Use CinematicScene (not bare Scene) for access to helper methods:

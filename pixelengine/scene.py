@@ -6,7 +6,7 @@ import tempfile
 from pixelengine.config import PixelConfig, DEFAULT_CONFIG
 from pixelengine.canvas import Canvas
 from pixelengine.camera import Camera
-from pixelengine.renderer import Renderer
+from pixelengine.renderer import Renderer, get_codec_info
 from pixelengine.sound import SoundFX, SoundTimeline, mux_audio_video
 from pixelengine.lighting import LightingEngine
 from pixelengine.camerafx import CameraFXPipeline, DepthOfField
@@ -483,6 +483,12 @@ class Scene:
             self._frames.append(frame)
         self._frame_count += 1
 
+        # Fire progress callback
+        if hasattr(self, '_on_progress') and self._on_progress is not None:
+            elapsed = time.time() - self._render_start_time
+            enc_fps = self._frame_count / elapsed if elapsed > 0 else 0
+            self._on_progress(self._frame_count, None, enc_fps, elapsed)
+
         # AI Debugging: Test Frame Extraction
         if getattr(self, 'test_frame_target', None) is not None:
             if self._current_time >= self.test_frame_target:
@@ -547,11 +553,12 @@ class Scene:
 
     # ── Video output ────────────────────────────────────────
 
-    def render(self, output_path: str = None, lint: bool = False):
+    def render(self, output_path: str = None, lint: bool = False,
+               on_progress=None, parallel: bool = False, workers: int = None):
         """Build the scene and encode to video with audio.
 
         Output path resolution:
-          - ``None``  → ``outputs/<script_name>/<SceneName>.mp4``
+          - ``None``  → ``outputs/<script_name>/<SceneName>.<ext>``
           - bare filename (e.g. ``"demo.mp4"``) → ``outputs/<script_name>/demo.mp4``
           - path with directories (e.g. ``"vids/demo.mp4"``) → used as-is
 
@@ -562,6 +569,12 @@ class Scene:
             output_path: Optional path for the output video file.
             lint: If True, run the linter on the source file before rendering.
                   Halts on violations.
+            on_progress: Optional callback ``(frame_index, total_frames, fps, elapsed)``
+                         called after each frame. ``total_frames`` is None until
+                         rendering completes (since total isn't known ahead of time).
+            parallel: If True, use multi-core parallel rendering for faster output.
+                      Note: parallel mode does not support audio muxing.
+            workers: Number of parallel workers (None = auto-detect CPU cores).
         """
         # ── Validate mode (--validate flag) ──
         if getattr(self, 'validate_mode', False):
@@ -596,6 +609,24 @@ class Scene:
                 print(f"[PixelEngine] ✅ Lint passed ({len(result['suggestions'])} suggestions)")
         import shutil
 
+        # ── Parallel rendering mode ──
+        if parallel:
+            from pixelengine.parallel import ParallelRenderer
+            _, _, codec_ext = get_codec_info(self.config.codec)
+            script_name = _get_script_name(self.__class__)
+            scene_name = self.__class__.__name__
+            if output_path is None or _is_bare_filename(output_path):
+                base_dir = os.path.join("outputs", script_name)
+                os.makedirs(base_dir, exist_ok=True)
+                if output_path is None:
+                    output_path = os.path.join(base_dir, f"{scene_name}{codec_ext}")
+                else:
+                    output_path = os.path.join(base_dir, output_path)
+            pr = ParallelRenderer(self.__class__, config=self.config)
+            pr.render(output_path, workers=workers, on_progress=on_progress)
+            print(f"[PixelEngine] ✓ Video saved to: {output_path}")
+            return
+
         print(f"[PixelEngine] Building scene: {self.__class__.__name__}")
         print(
             f"  Canvas: {self.config.canvas_width}×{self.config.canvas_height} "
@@ -610,6 +641,10 @@ class Scene:
         self._sound_timeline = SoundTimeline()
         self._last_tw_char_count = {}
         self._render_start_time = time.time()
+        self._on_progress = on_progress
+
+        # Determine codec extension
+        _, _, codec_ext = get_codec_info(self.config.codec)
 
         # Determine paths — auto-organize into outputs/<script>/
         script_name = _get_script_name(self.__class__)
@@ -620,7 +655,7 @@ class Scene:
             os.makedirs(base_dir, exist_ok=True)
 
             if output_path is None:
-                output_path = os.path.join(base_dir, f"{scene_name}.mp4")
+                output_path = os.path.join(base_dir, f"{scene_name}{codec_ext}")
             else:
                 output_path = os.path.join(base_dir, output_path)
 
@@ -636,7 +671,7 @@ class Scene:
 
         self._renderer = Renderer(self.config)
         with tempfile.TemporaryDirectory() as tmpdir:
-            tmp_video = os.path.join(tmpdir, "video_only.mp4")
+            tmp_video = os.path.join(tmpdir, f"video_only{codec_ext}")
             self._renderer.open(tmp_video, self.config.output_width, self.config.output_height)
             
             # RUN CONSTRUCT AND STREAM FRAMES
