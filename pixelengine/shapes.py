@@ -374,7 +374,7 @@ class Triangle(PObject):
         ys = [p[1] for p in self.points]
         min_x, max_x = min(xs), max(xs)
         min_y, max_y = min(ys), max(ys)
-        return Bounds(min_x, min_y, max_x - min_x, max_y - min_y)
+        return Bounds(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
 
     @property
     def center_x(self) -> int:
@@ -438,7 +438,7 @@ class Polygon(PObject):
         ys = [p[1] for p in self.points]
         min_x, max_x = min(xs), max(xs)
         min_y, max_y = min(ys), max(ys)
-        return Bounds(min_x, min_y, max_x - min_x, max_y - min_y)
+        return Bounds(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
 
     @property
     def center_x(self) -> int:

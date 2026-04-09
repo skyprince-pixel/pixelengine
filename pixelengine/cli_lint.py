@@ -172,7 +172,7 @@ def check_script(filepath):
                     found["updaters"] = True
                 if func_name in LAYOUT_USAGE:
                     found["layout"] = True
-                if func_name in ("play_voiceover", "generate") or "VoiceOver" in all_names:
+                if func_name in ("play_voiceover", "generate", "narrate") or "VoiceOver" in all_names:
                     found["voiceover"] = True
                 if func_name == "dynamic" or func_name in (
                     "piano_note", "bell_note", "mallet_note",
@@ -204,6 +204,35 @@ def check_script(filepath):
                         f"Line {node.lineno}: Detected 'TypeWriter'. "
                         "Use 'TypeWriterPro(text, cursor=True)' or "
                         "'PerCharacter(text, \"fade_in\", lag=0.05)' for richer text animation."
+                    )
+                elif func_name == "FadeOut":
+                    warnings.append(
+                        f"Line {node.lineno}: Detected 'FadeOut'. "
+                        "Use 'OrganicFadeOut(target)' for smoother exit animation."
+                    )
+
+                # ── Audio sync anti-pattern ──
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "play_sound"
+                ):
+                    warnings.append(
+                        f"Line {node.lineno}: Detected 'self.play_sound()'. "
+                        "For voiceover, use 'self.play(anim, duration=dur, sound=sfx)' "
+                        "or 'self.narrate(text, animate=anim)' to keep audio and visuals in sync."
+                    )
+
+                # ── Bare self.remove() anti-pattern ──
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "remove"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "self"
+                ):
+                    warnings.append(
+                        f"Line {node.lineno}: Detected 'self.remove()'. "
+                        "Use 'OrganicFadeOut(obj)' before removing to avoid objects "
+                        "vanishing abruptly at scene boundaries."
                     )
 
             # ── Hardcoded coordinate detection ──
@@ -428,6 +457,7 @@ def lint_source(source: str) -> dict:
                     found["voiceover"] = True
                 if func_name == "dynamic" or func_name in (
                     "piano_note", "bell_note", "mallet_note",
+                    "coin", "explosion", "jump",
                 ):
                     found["sound_fx"] = True
                 if func_name == "shake":
@@ -448,6 +478,30 @@ def lint_source(source: str) -> dict:
                 elif func_name == "TypeWriter":
                     warnings.append(
                         f"Line {node.lineno}: 'TypeWriter' → use 'TypeWriterPro' instead."
+                    )
+                elif func_name == "FadeOut":
+                    warnings.append(
+                        f"Line {node.lineno}: 'FadeOut' → use 'OrganicFadeOut' instead."
+                    )
+
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "play_sound"
+                ):
+                    warnings.append(
+                        f"Line {node.lineno}: 'self.play_sound()' → use "
+                        "'self.play(anim, duration=dur, sound=sfx)' or 'self.narrate()' for sync."
+                    )
+
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "remove"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "self"
+                ):
+                    warnings.append(
+                        f"Line {node.lineno}: 'self.remove()' → use 'OrganicFadeOut' "
+                        "before removing to avoid visual pops."
                     )
 
     if not has_scene:

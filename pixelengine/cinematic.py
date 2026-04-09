@@ -126,17 +126,17 @@ class CinematicScene(Scene):
         from pixelengine.voiceover import VoiceOver
         sfx, dur = VoiceOver.generate(text, voice=voice, engine=engine)
 
-        if sfx_context:
-            context_sfx = SoundFX.dynamic(sfx_context)
-            self.play_sound(context_sfx)
-
         if animate is None:
+            if sfx_context:
+                self.play_sound(SoundFX.dynamic(sfx_context))
             self.play_sound(sfx)
             self.wait(dur)
         else:
             if not isinstance(animate, (list, tuple)):
                 animate = [animate]
             from pixelengine.animation import AnimationGroup
+            if sfx_context:
+                self.play_sound(SoundFX.dynamic(sfx_context))
             self.play(AnimationGroup(*animate), duration=dur, sound=sfx)
 
     def add_captions(self, text, zone="LOWER_THIRD"):
